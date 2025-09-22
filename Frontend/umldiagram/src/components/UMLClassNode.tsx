@@ -187,11 +187,7 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
                 placeholder="Attribute name"
                 value={newAttribute.name}
                 onChange={(e) => setNewAttribute({ ...newAttribute, name: e.target.value })}
-<<<<<<< HEAD
                 className="w-full text-xs px-2 py-1 border rounded text-blue-700 font-semibold placeholder-blue-400"
-=======
-                className="w-full text-xs px-2 py-1 border rounded"
->>>>>>> 327cc17 (corrigiendo errores)
               />
               <div className="flex space-x-1">
                 <select
@@ -206,11 +202,7 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
                 <select
                   value={newAttribute.type}
                   onChange={(e) => setNewAttribute({ ...newAttribute, type: e.target.value as DataType })}
-<<<<<<< HEAD
                   className="text-xs px-1 py-1 border rounded flex-2 text-gray-700 font-semibold"
-=======
-                  className="text-xs px-1 py-1 border rounded flex-2"
->>>>>>> 327cc17 (corrigiendo errores)
                 >
                   {DATA_TYPES.map(type => (
                     <option key={type} value={type}>{type}</option>
@@ -281,13 +273,8 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
                       onDoubleClick={() => setEditingAttribute(attr.id)}
                     >
                       <span className="font-mono">{getVisibilitySymbol(attr.visibility)}</span>
-<<<<<<< HEAD
                       <span className={attr.isKey ? 'font-bold underline text-blue-700' : 'text-blue-700 font-semibold'}>{attr.name}</span>
                       <span className="text-gray-700">: {attr.type}</span>
-=======
-                      <span className={attr.isKey ? 'font-bold underline' : ''}>{attr.name}</span>
-                      <span className="text-blue-600">: {attr.type}</span>
->>>>>>> 327cc17 (corrigiendo errores)
                       {attr.isKey && <span className="text-yellow-600 ml-1">🔑</span>}
                     </span>
                     <button

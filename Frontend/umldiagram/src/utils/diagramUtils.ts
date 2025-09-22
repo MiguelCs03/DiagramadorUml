@@ -2,16 +2,9 @@ import type {
   UMLDiagram, 
   UMLEntity, 
   UMLRelation, 
-<<<<<<< HEAD
   UMLAttribute
 } from '../types/uml';
 import { CardinalityUtils } from '../types/uml';
-=======
-  UMLAttribute, 
-  CardinalityUtils 
-} from '../types/uml';
->>>>>>> 327cc17 (corrigiendo errores)
-
 /**
  * Utilidades para la gestión automática de tablas intermedias
  * según las reglas de UML y diseño de bases de datos

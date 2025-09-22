@@ -3,10 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import DiagramEditor from './DiagramEditor';
 import Sidebar from './Sidebar';
-<<<<<<< HEAD
 import AIChatBot from './AIChatBot';
-=======
->>>>>>> 327cc17 (corrigiendo errores)
 import type { 
   UMLDiagram, 
   UMLEntity, 
@@ -15,10 +12,7 @@ import type {
   RelationType
 } from '../types/uml';
 import { CardinalityUtils } from '../types/uml';
-<<<<<<< HEAD
 import { exportAsZip, exportDiagramAsJson } from '../utils/projectExporter';
-=======
->>>>>>> 327cc17 (corrigiendo errores)
 
 // Componente principal que maneja el estado del diagrama
 const UMLDiagramApp: React.FC = () => {
@@ -132,7 +126,6 @@ const UMLDiagramApp: React.FC = () => {
     alert(`Generating code for:\n- ${entities.length} entities\n- ${intermediateEntities.length} intermediate tables\n- ${diagram.relations.length} relations\n\nCode generation will be implemented in the backend integration.`);
   }, [diagram]);
 
-<<<<<<< HEAD
   // Manejar diagrama generado por IA
   const handleAIGeneratedDiagram = useCallback((newDiagram: UMLDiagram) => {
     setDiagram({
@@ -156,27 +149,11 @@ const UMLDiagramApp: React.FC = () => {
     try {
       const projectName = prompt('Nombre del proyecto:', diagram.name.replace(/\s+/g, '-').toLowerCase()) || 'uml-generated-project';
       const packageName = prompt('Nombre del paquete:', 'com.example.demo') || 'com.example.demo';
-      
       await exportAsZip(diagram, projectName, packageName);
     } catch (error) {
       console.error('Error exporting Spring Boot project:', error);
       alert('Error al exportar el proyecto Spring Boot. Verifica que jszip esté instalado.');
     }
-=======
-  // Exportar diagrama
-  const handleExportDiagram = useCallback(() => {
-    const dataStr = JSON.stringify(diagram, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${diagram.name || 'uml-diagram'}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
->>>>>>> 327cc17 (corrigiendo errores)
   }, [diagram]);
 
   // Importar diagrama
@@ -242,7 +219,6 @@ const UMLDiagramApp: React.FC = () => {
               <button
                 onClick={handleExportDiagram}
                 className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-<<<<<<< HEAD
                 title="Export diagram as JSON"
               >
                 📄 Export JSON
@@ -252,11 +228,8 @@ const UMLDiagramApp: React.FC = () => {
                 className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium"
                 title="Generate and download Spring Boot project"
               >
-                ☕ Export Spring Boot
-=======
-              >
+                ☕ Export Spring Boot              
                 Export
->>>>>>> 327cc17 (corrigiendo errores)
               </button>
               <button
                 onClick={handleImportDiagram}
@@ -284,17 +257,14 @@ const UMLDiagramApp: React.FC = () => {
           />
         </div>
       </div>
-<<<<<<< HEAD
 
       {/* AI ChatBot */}
       <AIChatBot
         onDiagramGenerated={handleAIGeneratedDiagram}
         currentDiagram={diagram}
       />
-=======
->>>>>>> 327cc17 (corrigiendo errores)
     </div>
   );
-};
+}
 
 export default UMLDiagramApp;
