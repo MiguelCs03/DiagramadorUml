@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 // Definiciones de tipos para Web Speech API
 declare global {
@@ -76,12 +76,18 @@ export const useVoiceRecognition = ({
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  const isSupported = typeof window !== 'undefined' &&
-    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  // Verificar soporte solo en el cliente (KISS - evitar problemas SSR)
+  useEffect(() => {
+    setIsSupported(
+      typeof window !== 'undefined' &&
+      ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+    );
+  }, []);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     if (!isSupported) {
       const errorMsg = 'Reconocimiento de voz no soportado en este navegador';
       setError(errorMsg);
@@ -90,6 +96,28 @@ export const useVoiceRecognition = ({
     }
 
     try {
+      // Verificar permisos de micrófono primero (KISS - prevenir errores comunes)
+      if (navigator.permissions) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          if (permission.state === 'denied') {
+            const errorMsg = 'Permisos de micrófono denegados. Por favor, permite el acceso al micrófono en la configuración del navegador.';
+            setError(errorMsg);
+            onError?.(errorMsg);
+            return;
+          }
+        } catch (permError) {
+          // Continuar si no se pueden verificar permisos
+          console.log('No se pudieron verificar permisos de micrófono:', permError);
+        }
+      }
+
+      // Cleanup anterior
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
 
@@ -126,10 +154,33 @@ export const useVoiceRecognition = ({
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        const errorMsg = `Error de reconocimiento: ${event.error}`;
+        let errorMsg = '';
+        
+        // Proporcionar mensajes más útiles según el tipo de error (KISS)
+        switch (event.error) {
+          case 'network':
+            errorMsg = 'Error de conexión. Verifica tu conexión a internet o intenta en HTTPS.';
+            break;
+          case 'not-allowed':
+            errorMsg = 'Permisos de micrófono denegados. Por favor, permite el acceso al micrófono.';
+            break;
+          case 'no-speech':
+            errorMsg = 'No se detectó voz. Habla más cerca del micrófono.';
+            break;
+          case 'audio-capture':
+            errorMsg = 'Error de captura de audio. Verifica que el micrófono esté conectado.';
+            break;
+          case 'service-not-allowed':
+            errorMsg = 'Servicio de reconocimiento no disponible. Intenta usar HTTPS.';
+            break;
+          default:
+            errorMsg = `Error de reconocimiento: ${event.error}`;
+        }
+        
         setError(errorMsg);
         setIsListening(false);
         onError?.(errorMsg);
+        console.error('Voice recognition error:', event.error, event.message);
       };
 
       recognition.onend = () => {
@@ -138,9 +189,11 @@ export const useVoiceRecognition = ({
 
       recognition.start();
     } catch (err) {
-      const errorMsg = 'Error al iniciar reconocimiento de voz';
+      const errorMsg = 'Error al iniciar reconocimiento de voz. Asegúrate de estar usando HTTPS.';
       setError(errorMsg);
       onError?.(errorMsg);
+      setIsListening(false);
+      console.error('Voice recognition start error:', err);
     }
   }, [isSupported, language, onResult, onError]);
 
@@ -150,6 +203,16 @@ export const useVoiceRecognition = ({
       recognitionRef.current = null;
     }
     setIsListening(false);
+  }, []);
+
+  // Cleanup al desmontar
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+    };
   }, []);
 
   return {

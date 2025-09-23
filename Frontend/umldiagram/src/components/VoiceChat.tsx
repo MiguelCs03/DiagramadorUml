@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
-import { AIService, type VoiceCommandRequest, type VoiceCommandResponse } from '../services/aiService';
+import { AIService, type DiagramGenerationRequest, type DiagramModificationRequest } from '../services/aiService';
 import type { UMLDiagram } from '../types/uml';
 
 interface VoiceChatProps {
@@ -14,7 +14,7 @@ interface Message {
   type: 'user' | 'ai';
   content: string;
   timestamp: Date;
-  action?: 'create' | 'modify' | 'delete' | 'explain';
+  action?: 'create' | 'modify' | 'delete' | 'explain' | 'add';
 }
 
 export const VoiceChat: React.FC<VoiceChatProps> = ({
@@ -24,7 +24,13 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Verificar que estemos en el cliente
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const {
     isListening,
@@ -35,7 +41,15 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({
     error: voiceError
   } = useVoiceRecognition({
     onResult: handleVoiceResult,
-    onError: (error) => console.error('Voice error:', error)
+    onError: (error) => {
+      console.error('Voice error:', error);
+      setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        type: 'ai',
+        content: `⚠️ Error de voz: ${error}`,
+        timestamp: new Date()
+      }]);
+    }
   });
 
   const scrollToBottom = () => {
@@ -61,44 +75,92 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({
     setIsProcessing(true);
 
     try {
-      const request: VoiceCommandRequest = {
-        command,
-        currentDiagram,
-        context: currentDiagram ? `Diagrama: ${currentDiagram.name}` : undefined
-      };
+      // Detectar la intención del usuario (KISS - simple y directo)
+      const intent = AIService.detectUserIntent(command, !!currentDiagram);
+      
+      let aiMessage: Message;
+      
+      if (intent === 'create') {
+        // Crear diagrama completo
+        const request: DiagramGenerationRequest = {
+          description: command,
+          businessContext: currentDiagram ? `Reemplazando diagrama actual: ${currentDiagram.name}` : undefined
+        };
 
-      const response: VoiceCommandResponse = await AIService.processVoiceCommand(request);
+        const response = await AIService.generateDiagram(request);
 
-      if (response.success) {
-        // Agregar respuesta de la IA
-        const aiMessage: Message = {
+        if (response.success && response.diagram) {
+          aiMessage = {
+            id: `ai-${Date.now()}`,
+            type: 'ai',
+            content: `✅ ${response.explanation || 'Diagrama creado exitosamente'}`,
+            timestamp: new Date(),
+            action: 'create'
+          };
+
+          if (onDiagramUpdate) {
+            onDiagramUpdate(response.diagram);
+          }
+        } else {
+          aiMessage = {
+            id: `ai-${Date.now()}`,
+            type: 'ai',
+            content: `❌ Error: ${response.error}`,
+            timestamp: new Date()
+          };
+        }
+
+      } else if (intent === 'modify' && currentDiagram) {
+        // Modificar diagrama existente
+        const request: DiagramModificationRequest = {
+          command,
+          currentDiagram,
+          context: `Diagrama: ${currentDiagram.name}`
+        };
+
+        const response = await AIService.modifyDiagram(request);
+
+        if (response.success && response.updatedDiagram) {
+          aiMessage = {
+            id: `ai-${Date.now()}`,
+            type: 'ai',
+            content: `✅ ${response.message}`,
+            timestamp: new Date(),
+            action: response.action
+          };
+
+          if (onDiagramUpdate) {
+            onDiagramUpdate(response.updatedDiagram);
+          }
+        } else {
+          aiMessage = {
+            id: `ai-${Date.now()}`,
+            type: 'ai',
+            content: `❌ Error: ${response.error}`,
+            timestamp: new Date()
+          };
+        }
+
+      } else {
+        // Chat conversacional simple
+        const response = await AIService.sendMessage(command, currentDiagram);
+        
+        aiMessage = {
           id: `ai-${Date.now()}`,
           type: 'ai',
-          content: response.message || 'Comando procesado correctamente',
+          content: response.success ? (response.response || 'Comando procesado') : `❌ Error: ${response.error}`,
           timestamp: new Date(),
-          action: response.action
+          action: 'explain'
         };
-
-        setMessages(prev => [...prev, aiMessage]);
-
-        // Actualizar diagrama si hay cambios
-        if (response.updatedDiagram && onDiagramUpdate) {
-          onDiagramUpdate(response.updatedDiagram);
-        }
-      } else {
-        const errorMessage: Message = {
-          id: `error-${Date.now()}`,
-          type: 'ai',
-          content: `Error: ${response.error}`,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, errorMessage]);
       }
+
+      setMessages(prev => [...prev, aiMessage]);
+
     } catch (error) {
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
         type: 'ai',
-        content: 'Error al procesar el comando',
+        content: 'Error al procesar el comando de voz',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -110,6 +172,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({
   const getActionIcon = (action?: string) => {
     switch (action) {
       case 'create': return '➕';
+      case 'add': return '➕';
       case 'modify': return '✏️';
       case 'delete': return '🗑️';
       case 'explain': return '💡';
@@ -120,6 +183,17 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({
   const clearMessages = () => {
     setMessages([]);
   };
+
+  // No renderizar hasta estar en el cliente (evitar problemas SSR)
+  if (!isClient) {
+    return (
+      <div className={`flex flex-col h-full bg-white border rounded-lg shadow-sm ${className}`}>
+        <div className="flex items-center justify-center h-full">
+          <div className="text-gray-500">Cargando chat de voz...</div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isSupported) {
     return (
@@ -208,9 +282,12 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({
               </p>
             )}
             {voiceError && (
-              <p className="text-sm text-red-600 mb-2">
-                ⚠️ {voiceError}
-              </p>
+              <div className="text-sm text-red-600 mb-2">
+                <p className="font-medium">⚠️ {voiceError}</p>
+                <p className="text-xs mt-1">
+                  💡 Consejo: Asegúrate de estar en HTTPS y permitir el micrófono
+                </p>
+              </div>
             )}
           </div>
 
@@ -231,6 +308,13 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({
           <div className="mt-2 text-xs text-gray-500">
             📊 Diagrama actual: {currentDiagram.name}
             ({currentDiagram.entities.length} entidades)
+          </div>
+        )}
+        
+        {/* Mensaje de ayuda sobre HTTPS */}
+        {voiceError && voiceError.includes('conexión') && (
+          <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+            ℹ️ El reconocimiento de voz requiere HTTPS en producción. En desarrollo local, intenta usar localhost en lugar de la IP.
           </div>
         )}
       </div>

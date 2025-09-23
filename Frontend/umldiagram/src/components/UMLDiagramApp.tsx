@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import DiagramEditor from './DiagramEditor';
 import Sidebar from './Sidebar';
 import AIChatBot from './AIChatBot';
+import { VoiceChat } from './VoiceChat';
 import type {
   UMLDiagram, 
   UMLEntity, 
@@ -212,14 +213,24 @@ const UMLDiagramApp: React.FC = () => {
         onImportDiagram={handleImportDiagram}
       />
 
+
       {/* Editor central */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex flex-col">
         <DiagramEditor
           diagram={diagram}
           onUpdateDiagram={handleUpdateDiagram}
           selectedTool={selectedTool}
           onClearTool={handleClearTool}
         />
+        {/* Botón principal para exportar backend Spring Boot */}
+        <div className="p-4 flex justify-center border-t bg-gray-50">
+          <button
+            onClick={handleExportSpringBoot}
+            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg shadow-lg font-semibold text-lg hover:from-purple-700 hover:to-blue-700 transition-all"
+          >
+            🚀 Exportar Backend Spring Boot
+          </button>
+        </div>
       </div>
 
       {/* Panel derecho con pestañas para IA y Voz */}
@@ -257,9 +268,10 @@ const UMLDiagramApp: React.FC = () => {
             />
           )}
           {activePanel === 'voice' && (
-            <div className="p-4 text-center text-gray-500">
-              🎤 Voice functionality coming soon...
-            </div>
+            <VoiceChat
+              currentDiagram={diagram}
+              onDiagramUpdate={handleAIGeneratedDiagram}
+            />
           )}
         </div>
       </div>
