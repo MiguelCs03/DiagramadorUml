@@ -1,4 +1,4 @@
-import type { UMLDiagram, UMLEntity, UMLRelation, UMLAttribute, DataType, Visibility, RelationType, EntityType } from '../types/uml';
+import type { UMLDiagram, UMLEntity, UMLRelation, DataType, Visibility, RelationType, EntityType } from '../types/uml';
 import { CardinalityUtils } from '../types/uml';
 
 // Groq API Configuration
@@ -18,7 +18,74 @@ export interface DiagramGenerationResponse {
   explanation?: string;
 }
 
+export interface DiagramModificationRequest {
+  command: string;
+  currentDiagram: UMLDiagram;
+  context?: string;
+}
+
+export interface DiagramModificationResponse {
+  success: boolean;
+  updatedDiagram?: UMLDiagram;
+  message?: string;
+  error?: string;
+  action?: 'add' | 'modify' | 'delete' | 'explain';
+}
+
+export interface VoiceCommandRequest {
+  command: string;
+  currentDiagram?: UMLDiagram;
+  context?: string;
+}
+
+export interface VoiceCommandResponse {
+  success: boolean;
+  updatedDiagram?: UMLDiagram;
+  message?: string;
+  error?: string;
+  action?: 'create' | 'modify' | 'delete' | 'explain';
+}
+
 export class AIService {
+  // Función simple para detectar la intención del usuario (KISS principle)
+  static detectUserIntent(message: string, hasCurrentDiagram: boolean): 'create' | 'modify' | 'chat' {
+    const lowerMessage = message.toLowerCase();
+    
+    // Palabras clave para modificación
+    const modifyKeywords = [
+      'añade', 'agrega', 'añadir', 'agregar', 'add',
+      'modifica', 'modificar', 'modify', 'cambiar', 'change',
+      'elimina', 'eliminar', 'delete', 'remove', 'quitar',
+      'actualiza', 'actualizar', 'update'
+    ];
+    
+    // Palabras clave para creación completa
+    const createKeywords = [
+      'crea', 'crear', 'create', 'generar', 'generate',
+      'diseña', 'diseñar', 'design', 'sistema', 'diagrama'
+    ];
+    
+    // Si no hay diagrama actual, siempre crear
+    if (!hasCurrentDiagram) {
+      return 'create';
+    }
+    
+    // Buscar palabras clave de modificación
+    const hasModifyKeyword = modifyKeywords.some(keyword => lowerMessage.includes(keyword));
+    if (hasModifyKeyword) {
+      return 'modify';
+    }
+    
+    // Buscar palabras clave de creación completa
+    const hasCreateKeyword = createKeywords.some(keyword => lowerMessage.includes(keyword));
+    if (hasCreateKeyword) {
+      return 'create';
+    }
+    
+    // Si no es claro, defaultear a chat conversacional
+    return 'chat';
+  }
+
   static async generateDiagram(request: DiagramGenerationRequest): Promise<DiagramGenerationResponse> {
     try {
       const prompt = this.createPrompt(request);
@@ -33,7 +100,9 @@ export class AIService {
           messages: [
             {
               role: "system",
-              content: `You are an expert UML diagram designer. Your task is to generate a comprehensive UML class diagram based on the user's description. 
+              content: `You are an expert UML diagram designer. Your task is to generate UML class diagrams based on the user's description. 
+
+You can create diagrams with ANY NUMBER of entities as specified by the user. If they mention a specific number, create exactly that many. If they don't specify, create a comprehensive diagram with as many entities as needed to properly model the system.
 
 IMPORTANT: Respond ONLY with valid JSON in the exact format specified below. Do not include any explanations, markdown formatting, or additional text.
 
@@ -75,6 +144,7 @@ Expected JSON format:
 }
 
 Generate realistic and meaningful class diagrams with:
+- Create as many entities as needed or specified by the user
 - Proper inheritance hierarchies where applicable
 - Appropriate relationships between classes
 - Realistic attributes and methods for each class
@@ -137,6 +207,212 @@ Available relation types: inheritance, composition, aggregation, association, de
     }
   }
 
+  // Nueva función para modificaciones incrementales (YAGNI - solo lo que necesitamos)
+  static async modifyDiagram(request: DiagramModificationRequest): Promise<DiagramModificationResponse> {
+    try {
+      const systemPrompt = `You are a UML diagram modification assistant. Modify existing diagrams based on user commands.
+
+CURRENT DIAGRAM ENTITIES: ${request.currentDiagram.entities.map(e => e.name).join(', ')}
+
+Your task is to understand the user's command and provide ONLY the specific modifications needed.
+
+IMPORTANT: Respond ONLY with valid JSON in this format:
+{
+  "action": "add|modify|delete",
+  "message": "Brief description of what was done",
+  "changes": {
+    "newEntities": [
+      {
+        "id": "unique_id",
+        "name": "ClassName",
+        "type": "class",
+        "attributes": [{"name": "attr", "type": "String", "visibility": "private"}],
+        "methods": [{"name": "method", "returnType": "void", "parameters": [], "visibility": "public"}],
+        "position": {"x": 100, "y": 100}
+      }
+    ],
+    "modifiedEntities": [
+      {
+        "id": "existing_entity_id",
+        "changes": {
+          "newAttributes": [{"name": "attr", "type": "String", "visibility": "private"}],
+          "newMethods": [{"name": "method", "returnType": "void", "parameters": [], "visibility": "public"}]
+        }
+      }
+    ],
+    "newRelations": [
+      {
+        "id": "unique_relation_id",
+        "sourceId": "source_entity_id_or_name",
+        "targetId": "target_entity_id_or_name",
+        "type": "association",
+        "sourceCardinality": "1",
+        "targetCardinality": "*"
+      }
+    ],
+    "deletedEntities": ["entity_name_to_delete"],
+    "deletedRelations": ["relation_id_to_delete"]
+  }
+}
+
+For ADD commands: Create new entities/relations
+For MODIFY commands: Update existing entities
+For DELETE commands: Remove entities/relations
+
+Keep modifications minimal and focused only on what the user requested.`;
+
+      const response = await fetch(GROQ_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: request.command }
+          ],
+          model: "llama-3.1-8b-instant",
+          temperature: 0.3,
+          max_tokens: 1500,
+          stream: false
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content;
+
+      if (!content) {
+        throw new Error('No content received');
+      }
+
+      console.log('AI Modification Response:', content);
+
+      const parsedResponse = this.parseAIResponse(content);
+      if (!parsedResponse) {
+        throw new Error('Failed to parse AI response');
+      }
+
+      const updatedDiagram = this.applyModificationsToDiagram(request.currentDiagram, parsedResponse.changes);
+
+      return {
+        success: true,
+        updatedDiagram,
+        message: parsedResponse.message || 'Diagrama modificado correctamente',
+        action: parsedResponse.action || 'modify'
+      };
+
+    } catch (error) {
+      console.error('Error modifying diagram:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      };
+    }
+  }
+
+  private static applyModificationsToDiagram(diagram: UMLDiagram, changes: any): UMLDiagram {
+    const updated = JSON.parse(JSON.stringify(diagram)); // Deep clone
+
+    // Agregar nuevas entidades
+    if (changes.newEntities) {
+      for (const entity of changes.newEntities) {
+        const umlEntity = this.convertEntityToUML(entity);
+        updated.entities.push(umlEntity);
+      }
+    }
+
+    // Modificar entidades existentes
+    if (changes.modifiedEntities) {
+      for (const modification of changes.modifiedEntities) {
+        const entityIndex = updated.entities.findIndex((e: UMLEntity) => 
+          e.id === modification.id || e.name === modification.id
+        );
+        
+        if (entityIndex >= 0) {
+          const entity = updated.entities[entityIndex];
+          
+          // Agregar nuevos atributos
+          if (modification.changes.newAttributes) {
+            const newAttrs = modification.changes.newAttributes.map((attr: any, index: number) => ({
+              id: `attr-${entity.id}-${entity.attributes.length + index}`,
+              name: attr.name,
+              type: this.mapDataType(attr.type),
+              visibility: this.mapVisibility(attr.visibility),
+              isKey: attr.isKey || false,
+              defaultValue: attr.defaultValue
+            }));
+            entity.attributes.push(...newAttrs);
+          }
+          
+          // Agregar nuevos métodos
+          if (modification.changes.newMethods) {
+            const newMethods = modification.changes.newMethods.map((method: any, index: number) => ({
+              id: `method-${entity.id}-${entity.methods.length + index}`,
+              name: method.name,
+              returnType: this.mapDataType(method.returnType),
+              visibility: this.mapVisibility(method.visibility),
+              parameters: method.parameters || [],
+              isStatic: method.isStatic || false,
+              isAbstract: method.isAbstract || false
+            }));
+            entity.methods.push(...newMethods);
+          }
+        }
+      }
+    }
+
+    // Agregar nuevas relaciones
+    if (changes.newRelations) {
+      for (const relation of changes.newRelations) {
+        // Resolver nombres a IDs si es necesario
+        const sourceId = this.resolveEntityId(updated, relation.sourceId);
+        const targetId = this.resolveEntityId(updated, relation.targetId);
+        
+        if (sourceId && targetId) {
+          const umlRelation: UMLRelation = {
+            id: relation.id || `relation-${Date.now()}-${Math.random()}`,
+            source: sourceId,
+            target: targetId,
+            type: this.mapRelationType(relation.type),
+            sourceCardinality: CardinalityUtils.parseCardinality(relation.sourceCardinality || '1'),
+            targetCardinality: CardinalityUtils.parseCardinality(relation.targetCardinality || '1'),
+            label: relation.label
+          };
+          updated.relations.push(umlRelation);
+        }
+      }
+    }
+
+    // Eliminar entidades
+    if (changes.deletedEntities) {
+      updated.entities = updated.entities.filter((e: UMLEntity) => 
+        !changes.deletedEntities.includes(e.name) && !changes.deletedEntities.includes(e.id)
+      );
+    }
+
+    // Eliminar relaciones
+    if (changes.deletedRelations) {
+      updated.relations = updated.relations.filter((r: UMLRelation) => 
+        !changes.deletedRelations.includes(r.id)
+      );
+    }
+
+    // Actualizar metadata
+    updated.metadata.modified = new Date();
+
+    return updated;
+  }
+
+  private static resolveEntityId(diagram: UMLDiagram, nameOrId: string): string | null {
+    const entity = diagram.entities.find((e: UMLEntity) => e.id === nameOrId || e.name === nameOrId);
+    return entity ? entity.id : null;
+  }
+
   private static createPrompt(request: DiagramGenerationRequest): string {
     let prompt = `Generate a UML class diagram for: ${request.description}`;
     
@@ -148,12 +424,21 @@ Available relation types: inheritance, composition, aggregation, association, de
       prompt += `\n\nAdditional Requirements: ${request.additionalRequirements}`;
     }
 
-    prompt += `\n\nMake sure to include:
+    // Detectar si el usuario especifica número de entidades
+    const numberMatch = request.description.match(/(\d+)\s*(tabla|clase|entidad|entity|table|class)/i);
+    if (numberMatch) {
+      const count = numberMatch[1];
+      prompt += `\n\nIMPORTANT: Create exactly ${count} entities as requested by the user.`;
+    }
+
+    prompt += `\n\nGenerate a complete and comprehensive diagram with:
+- As many entities as needed to properly model the system (don't limit to 5)
 - Proper entity relationships (inheritance, composition, association, etc.)
 - Realistic attributes with appropriate data types
 - Key methods for each class
 - Proper visibility modifiers
-- Position entities in a logical layout`;
+- Position entities in a logical layout
+- Include all necessary supporting classes and relationships`;
 
     return prompt;
   }
@@ -161,7 +446,7 @@ Available relation types: inheritance, composition, aggregation, association, de
   private static parseAIResponse(content: string): any {
     try {
       // Try to extract JSON from the response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const jsonMatch = content.match(/{[\s\S]*}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
@@ -446,5 +731,217 @@ Example response format:
       console.error('Error getting suggestions:', error);
       return ['No se pudieron obtener sugerencias en este momento.'];
     }
+  }
+
+  // Nuevo método principal para comandos de voz
+  static async processVoiceCommand(request: VoiceCommandRequest): Promise<VoiceCommandResponse> {
+    try {
+      const systemPrompt = this.createVoiceSystemPrompt(request.currentDiagram);
+      const userPrompt = this.createVoiceUserPrompt(request);
+
+      const response = await fetch(GROQ_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          model: "llama-3.1-8b-instant",
+          temperature: 0.3,
+          max_tokens: 2000,
+          stream: false
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content;
+
+      if (!content) {
+        throw new Error('No content received');
+      }
+
+      return this.parseVoiceResponse(content, request.currentDiagram);
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      };
+    }
+  }
+
+  private static createVoiceSystemPrompt(currentDiagram?: UMLDiagram): string {
+    const diagramContext = currentDiagram ?
+      `\n\nDiagrama actual: ${currentDiagram.entities.map(e => e.name).join(', ')}` :
+      '\n\nNo hay diagrama actualmente.';
+
+    return `Eres un asistente de diagramas UML conversacional. Responde comandos de voz para:
+- AGREGAR entidades: "agrega la clase Usuario" 
+- MODIFICAR entidades: "añade atributo email a Usuario"
+- CREAR relaciones: "Usuario tiene muchos Productos"
+- ELIMINAR elementos: "elimina la clase Producto"
+- EXPLICAR: "explica la relación entre Usuario y Producto"
+
+FORMATO DE RESPUESTA: Responde SOLO con JSON válido:
+{
+  "action": "create|modify|delete|explain",
+  "message": "descripción de lo que hiciste",
+  "changes": {
+    "entities": [{"id":"", "name":"", "type":"class", "attributes":[{"name":"", "type":"String", "visibility":"private"}], "methods":[]}],
+    "relations": [{"id":"", "source":"", "target":"", "type":"association", "sourceCardinality":"1", "targetCardinality":"*"}],
+    "deletions": {"entities": [], "relations": []}
+  }
+}${diagramContext}`;
+  }
+
+  private static createVoiceUserPrompt(request: VoiceCommandRequest): string {
+    let prompt = `Comando: "${request.command}"`;
+
+    if (request.context) {
+      prompt += `\nContexto adicional: ${request.context}`;
+    }
+
+    return prompt;
+  }
+
+  private static parseVoiceResponse(content: string, currentDiagram?: UMLDiagram): VoiceCommandResponse {
+    try {
+      const response = JSON.parse(content.trim());
+
+      if (!response.action) {
+        throw new Error('Respuesta inválida');
+      }
+
+      let updatedDiagram = currentDiagram ? { ...currentDiagram } : this.createEmptyDiagram();
+
+      if (response.changes) {
+        updatedDiagram = this.applyChangesToDiagram(updatedDiagram, response.changes);
+      }
+
+      return {
+        success: true,
+        updatedDiagram,
+        message: response.message || 'Comando procesado',
+        action: response.action
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Error al procesar la respuesta de IA'
+      };
+    }
+  }
+
+  private static createEmptyDiagram(): UMLDiagram {
+    return {
+      id: `diagram-${Date.now()}`,
+      name: 'Nuevo Diagrama',
+      entities: [],
+      relations: [],
+      metadata: {
+        created: new Date(),
+        modified: new Date(),
+        version: '1.0.0'
+      }
+    };
+  }
+
+  private static applyChangesToDiagram(diagram: UMLDiagram, changes: any): UMLDiagram {
+    const updated = { ...diagram };
+
+    // Agregar/modificar entidades
+    if (changes.entities) {
+      for (const entity of changes.entities) {
+        const existingIndex = updated.entities.findIndex(e => e.name === entity.name);
+        const umlEntity = this.convertEntityToUML(entity);
+
+        if (existingIndex >= 0) {
+          updated.entities[existingIndex] = { ...updated.entities[existingIndex], ...umlEntity };
+        } else {
+          updated.entities.push(umlEntity);
+        }
+      }
+    }
+
+    // Agregar relaciones
+    if (changes.relations) {
+      for (const relation of changes.relations) {
+        const umlRelation = this.convertRelationToUML(relation);
+        updated.relations.push(umlRelation);
+      }
+    }
+
+    // Eliminar elementos
+    if (changes.deletions) {
+      if (changes.deletions.entities) {
+        updated.entities = updated.entities.filter(e =>
+          !changes.deletions.entities.includes(e.name)
+        );
+      }
+      if (changes.deletions.relations) {
+        updated.relations = updated.relations.filter(r =>
+          !changes.deletions.relations.includes(r.id)
+        );
+      }
+    }
+
+    // Asegurar que metadata existe antes de modificar
+    if (updated.metadata) {
+      updated.metadata.modified = new Date();
+    } else {
+      updated.metadata = {
+        created: new Date(),
+        modified: new Date(),
+        version: '1.0.0'
+      };
+    }
+
+    return updated;
+  }
+
+  private static convertEntityToUML(entity: any): UMLEntity {
+    return {
+      id: entity.id || `entity-${Date.now()}-${Math.random()}`,
+      name: entity.name,
+      type: this.mapEntityType(entity.type),
+      attributes: (entity.attributes || []).map((attr: any, index: number) => ({
+        id: `attr-${entity.id || Date.now()}-${index}`,
+        name: attr.name,
+        type: this.mapDataType(attr.type),
+        visibility: this.mapVisibility(attr.visibility),
+        isKey: attr.isKey || false,
+        defaultValue: attr.defaultValue
+      })),
+      methods: (entity.methods || []).map((method: any, index: number) => ({
+        id: `method-${entity.id || Date.now()}-${index}`,
+        name: method.name,
+        returnType: this.mapDataType(method.returnType),
+        visibility: this.mapVisibility(method.visibility),
+        parameters: method.parameters || [],
+        isStatic: method.isStatic || false,
+        isAbstract: method.isAbstract || false
+      }))
+    };
+  }
+
+  private static convertRelationToUML(relation: any): UMLRelation {
+    return {
+      id: relation.id || `relation-${Date.now()}-${Math.random()}`,
+      source: relation.source,
+      target: relation.target,
+      type: this.mapRelationType(relation.type),
+      sourceCardinality: CardinalityUtils.parseCardinality(relation.sourceCardinality || '1'),
+      targetCardinality: CardinalityUtils.parseCardinality(relation.targetCardinality || '1'),
+      label: relation.label
+    };
   }
 }

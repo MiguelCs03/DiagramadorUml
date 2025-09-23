@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import DiagramEditor from './DiagramEditor';
 import Sidebar from './Sidebar';
 import AIChatBot from './AIChatBot';
-import type { 
+import type {
   UMLDiagram, 
   UMLEntity, 
   UMLRelation, 
@@ -35,6 +35,9 @@ const UMLDiagramApp: React.FC = () => {
 
   // Herramienta seleccionada en la sidebar
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
+
+  // Estado para controlar el panel lateral activo
+  const [activePanel, setActivePanel] = useState<'ai' | 'voice' | null>('ai');
 
   // useEffect para detectar si estamos en el cliente
   useEffect(() => {
@@ -191,9 +194,14 @@ const UMLDiagramApp: React.FC = () => {
     setSelectedTool(null);
   }, []);
 
+  // Si no estamos en el cliente, no renderizamos nada para evitar problemas de hidratación
+  if (!isClient) {
+    return null;
+  }
+
   return (
-    <div className="h-screen w-screen flex bg-gray-100">
-      {/* Sidebar */}
+    <div className="h-screen flex bg-gray-100">
+      {/* Sidebar izquierda */}
       <Sidebar
         selectedTool={selectedTool}
         onSelectTool={setSelectedTool}
@@ -204,65 +212,57 @@ const UMLDiagramApp: React.FC = () => {
         onImportDiagram={handleImportDiagram}
       />
 
-      {/* Main diagram area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{diagram.name}</h1>
-              <p className="text-sm text-gray-500">
-                Last modified: {isClient ? diagram.metadata?.modified.toLocaleString() : 'Loading...'}
-              </p>
-            </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={handleExportDiagram}
-                className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                title="Export diagram as JSON"
-              >
-                📄 Export JSON
-              </button>
-              <button
-                onClick={handleExportSpringBoot}
-                className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium"
-                title="Generate and download Spring Boot project"
-              >
-                ☕ Export Spring Boot              
-                Export
-              </button>
-              <button
-                onClick={handleImportDiagram}
-                className="px-3 py-2 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-              >
-                Import
-              </button>
-              <button
-                onClick={handleGenerateCode}
-                className="px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 transition-colors font-medium"
-              >
-                🚀 Generate Code
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Diagram editor */}
-        <div className="flex-1">
-          <DiagramEditor
-            diagram={diagram}
-            onUpdateDiagram={handleUpdateDiagram}
-            selectedTool={selectedTool}
-            onClearTool={handleClearTool}
-          />
-        </div>
+      {/* Editor central */}
+      <div className="flex-1 flex">
+        <DiagramEditor
+          diagram={diagram}
+          onUpdateDiagram={handleUpdateDiagram}
+          selectedTool={selectedTool}
+          onClearTool={handleClearTool}
+        />
       </div>
 
-      {/* AI ChatBot */}
-      <AIChatBot
-        onDiagramGenerated={handleAIGeneratedDiagram}
-        currentDiagram={diagram}
-      />
+      {/* Panel derecho con pestañas para IA y Voz */}
+      <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
+        {/* Pestañas */}
+        <div className="flex border-b">
+          <button
+            onClick={() => setActivePanel(activePanel === 'ai' ? null : 'ai')}
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+              activePanel === 'ai' 
+                ? 'bg-blue-500 text-white' 
+                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            💬 Chat IA
+          </button>
+          <button
+            onClick={() => setActivePanel(activePanel === 'voice' ? null : 'voice')}
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+              activePanel === 'voice' 
+                ? 'bg-green-500 text-white' 
+                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            🎤 Voz
+          </button>
+        </div>
+
+        {/* Contenido del panel activo */}
+        <div className="flex-1 min-h-0">
+          {activePanel === 'ai' && (
+            <AIChatBot
+              onDiagramGenerated={handleAIGeneratedDiagram}
+              currentDiagram={diagram}
+            />
+          )}
+          {activePanel === 'voice' && (
+            <div className="p-4 text-center text-gray-500">
+              🎤 Voice functionality coming soon...
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

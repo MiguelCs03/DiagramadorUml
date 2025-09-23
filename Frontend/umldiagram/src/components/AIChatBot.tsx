@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { AIService, type DiagramGenerationRequest, type DiagramGenerationResponse } from '../services/aiService';
+import { AIService, type DiagramGenerationRequest, type DiagramGenerationResponse, type DiagramModificationRequest, type DiagramModificationResponse } from '../services/aiService';
 import type { UMLDiagram } from '../types/uml';
 
 interface ChatMessage {
@@ -20,7 +20,7 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
     {
       id: '1',
       type: 'system',
-      content: '¡Hola! 👋 Soy tu asistente de IA para generar diagramas UML. Describe el negocio o sistema que quieres modelar y te ayudo a crear el diagrama automáticamente.',
+      content: '¡Hola! 👋 Soy tu asistente de IA para diagramas UML.\n\n📋 **Puedo ayudarte con:**\n• Crear diagramas completos (ej: "Sistema de biblioteca con 8 clases")\n• Modificar diagramas existentes (ej: "Añade la clase Autor")\n• Sugerir mejoras\n\n💡 **Tip:** Sé específico sobre cuántas clases necesitas para diagramas completos.',
       timestamp: new Date()
     }
   ]);
@@ -60,20 +60,48 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
     setIsLoading(true);
 
     try {
-      // Prepare the request
-      const request: DiagramGenerationRequest = {
-        description: userMessage,
-        businessContext: currentDiagram ? `Diagrama actual: ${currentDiagram.name} con ${currentDiagram.entities.length} entidades` : undefined
-      };
+      // Detectar la intención del usuario (KISS principle)
+      const intent = AIService.detectUserIntent(userMessage, !!currentDiagram);
+      
+      if (intent === 'modify' && currentDiagram) {
+        // Modificar diagrama existente
+        const request: DiagramModificationRequest = {
+          command: userMessage,
+          currentDiagram: currentDiagram
+        };
 
-      // Call AI service
-      const response: DiagramGenerationResponse = await AIService.generateDiagram(request);
+        const response: DiagramModificationResponse = await AIService.modifyDiagram(request);
 
-      if (response.success && response.diagram) {
-        addMessage('ai', response.explanation || '✅ ¡Diagrama generado exitosamente!');
-        onDiagramGenerated(response.diagram);
+        if (response.success && response.updatedDiagram) {
+          addMessage('ai', `✅ ${response.message}`);
+          onDiagramGenerated(response.updatedDiagram);
+        } else {
+          addMessage('ai', `❌ Error: ${response.error || 'No se pudo modificar el diagrama'}`);
+        }
+      } else if (intent === 'create') {
+        // Crear nuevo diagrama
+        const request: DiagramGenerationRequest = {
+          description: userMessage,
+          businessContext: currentDiagram ? `Reemplazando diagrama actual: ${currentDiagram.name}` : undefined
+        };
+
+        const response: DiagramGenerationResponse = await AIService.generateDiagram(request);
+
+        if (response.success && response.diagram) {
+          addMessage('ai', response.explanation || '✅ ¡Diagrama generado exitosamente!');
+          onDiagramGenerated(response.diagram);
+        } else {
+          addMessage('ai', `❌ Error: ${response.error || 'No se pudo generar el diagrama'}`);
+        }
       } else {
-        addMessage('ai', `❌ Error: ${response.error || 'No se pudo generar el diagrama'}`);
+        // Chat conversacional
+        const response = await AIService.sendMessage(userMessage, currentDiagram);
+        
+        if (response.success && response.response) {
+          addMessage('ai', response.response);
+        } else {
+          addMessage('ai', `❌ Error: ${response.error || 'No se pudo procesar el mensaje'}`);
+        }
       }
     } catch (error) {
       console.error('Error in chat:', error);
@@ -104,11 +132,19 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
   }, [currentDiagram, isLoading, addMessage]);
 
   const examplePrompts = [
-    "Sistema de gestión de biblioteca con libros, usuarios y préstamos",
-    "E-commerce con productos, clientes, pedidos y pagos",
-    "Sistema de recursos humanos con empleados, departamentos y nóminas",
-    "Red social con usuarios, publicaciones y comentarios",
-    "Sistema bancario con cuentas, transacciones y clientes"
+    "Sistema de gestión de biblioteca con 8 clases",
+    "E-commerce completo con 10 entidades principales", 
+    "Sistema bancario con 6 clases: Cliente, Cuenta, Transacción, etc",
+    "Red social básica con 5 clases principales",
+    "Sistema de recursos humanos con 7 entidades"
+  ];
+
+  const modificationExamples = [
+    "Añade la clase Autor con atributos nombre y biografía",
+    "Agrega un método calcularDescuento a la clase Producto",
+    "Crea una relación entre Usuario y Pedido",
+    "Elimina la clase Temporal",
+    "Modifica la clase Cliente para incluir email"
   ];
 
   const handleExampleClick = useCallback((example: string) => {
@@ -207,9 +243,11 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
       {/* Example Prompts */}
       {messages.length <= 1 && (
         <div className="px-4 py-2 border-t border-gray-200">
-          <div className="text-xs text-gray-600 mb-2">Ejemplos rápidos:</div>
+          <div className="text-xs text-gray-600 mb-2">
+            {currentDiagram ? "Ejemplos para modificar:" : "Ejemplos para crear:"}
+          </div>
           <div className="space-y-1">
-            {examplePrompts.slice(0, 3).map((example, index) => (
+            {(currentDiagram ? modificationExamples : examplePrompts).slice(0, 3).map((example, index) => (
               <button
                 key={index}
                 onClick={() => handleExampleClick(example)}
@@ -224,13 +262,28 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200">
+        {/* Intent indicator */}
+        {inputValue.trim() && (
+          <div className="mb-2 text-xs text-gray-600">
+            {(() => {
+              const intent = AIService.detectUserIntent(inputValue, !!currentDiagram);
+              const icons = {
+                create: '🔄 Crear nuevo diagrama',
+                modify: '✏️ Modificar diagrama actual',
+                chat: '💬 Conversar'
+              };
+              return icons[intent];
+            })()}
+          </div>
+        )}
+        
         <div className="flex space-x-2">
           <input
             ref={inputRef}
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Describe el negocio o sistema..."
+            placeholder={currentDiagram ? "Modifica el diagrama o crea uno nuevo..." : "Describe el negocio o sistema..."}
             className="flex-1 text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isLoading}
           />
