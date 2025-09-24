@@ -6,6 +6,7 @@ import type { UMLEntity, UMLAttribute, DataType, Visibility, UMLMethod } from '.
 interface UMLClassNodeData {
   entity: UMLEntity;
   onUpdateEntity?: (updatedEntity: UMLEntity) => void;
+  onDeleteEntity?: () => void;
 }
 
 type UMLClassNodeProps = NodeProps<UMLClassNodeData>;
@@ -18,7 +19,7 @@ const DATA_TYPES: DataType[] = [
 const VISIBILITIES: Visibility[] = ['public', 'private', 'protected', 'package'];
 
 const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
-  const { entity, onUpdateEntity } = data;
+  const { entity, onUpdateEntity, onDeleteEntity } = data;
   const [isEditing, setIsEditing] = useState(false);
   const [editingAttribute, setEditingAttribute] = useState<string | null>(null);
   const [showAddAttribute, setShowAddAttribute] = useState(false);
@@ -136,7 +137,16 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
       <Handle type="source" position={Position.Right} className="w-3 h-3 bg-blue-500" />
 
       {/* Header */}
-      <div className={`${getEntityTypeColor(entity.type || 'class')} text-white px-3 py-2 rounded-t-lg`}>
+      <div className={`${getEntityTypeColor(entity.type || 'class')} text-white px-3 py-2 rounded-t-lg relative`}>
+        {onDeleteEntity && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDeleteEntity(); }}
+            className="absolute top-1 right-1 text-xs bg-red-600 hover:bg-red-700 px-1.5 py-0.5 rounded"
+            title="Eliminar entidad"
+          >
+            ✕
+          </button>
+        )}
         {entity.stereotype && (
           <div className="text-xs italic text-center">{entity.stereotype}</div>
         )}
@@ -168,11 +178,11 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
       {/* Attributes Section */}
       <div className="border-b border-gray-300">
         <div className="px-3 py-1 bg-gray-50 text-xs font-semibold text-gray-700 flex justify-between items-center">
-          <span>Attributes</span>
+          <span>Atributos</span>
           <button
             onClick={() => setShowAddAttribute(!showAddAttribute)}
             className="text-blue-600 hover:text-blue-800 text-lg font-bold"
-            title="Add attribute"
+            title="Agregar atributo"
           >
             +
           </button>
@@ -184,7 +194,7 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
             <div className="space-y-2">
               <input
                 type="text"
-                placeholder="Attribute name"
+                placeholder="Nombre del atributo"
                 value={newAttribute.name}
                 onChange={(e) => setNewAttribute({ ...newAttribute, name: e.target.value })}
                 className="w-full text-xs px-2 py-1 border rounded text-blue-700 font-semibold placeholder-blue-400"
@@ -214,13 +224,13 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
                   onClick={handleAddAttribute}
                   className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
-                  Add
+                  Agregar
                 </button>
                 <button
                   onClick={() => setShowAddAttribute(false)}
                   className="text-xs px-2 py-1 bg-gray-400 text-white rounded hover:bg-gray-500"
                 >
-                  Cancel
+                  Cancelar
                 </button>
               </div>
             </div>
@@ -230,7 +240,7 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
         {/* Attributes list */}
         <div className="px-3 py-2 max-h-32 overflow-y-auto">
           {entity.attributes.length === 0 ? (
-            <div className="text-gray-400 italic text-xs">No attributes</div>
+            <div className="text-gray-400 italic text-xs">Sin atributos</div>
           ) : (
             entity.attributes.map(attr => (
               <div 
@@ -280,7 +290,7 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
                     <button
                       onClick={() => handleRemoveAttribute(attr.id)}
                       className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 ml-2"
-                      title="Remove attribute"
+                      title="Eliminar atributo"
                     >
                       ×
                     </button>
@@ -295,11 +305,11 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
       {/* Methods Section */}
       <div>
         <div className="px-3 py-1 bg-gray-50 text-xs font-semibold text-gray-700 flex justify-between items-center">
-          <span>Methods</span>
+          <span>Métodos</span>
           <button
             onClick={() => setShowAddMethod(!showAddMethod)}
             className="text-blue-600 hover:text-blue-800 text-lg font-bold"
-            title="Add method"
+            title="Agregar método"
           >
             +
           </button>
@@ -311,7 +321,7 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
             <div className="space-y-2">
               <input
                 type="text"
-                placeholder="Method name"
+                placeholder="Nombre del método"
                 value={newMethod.name}
                 onChange={(e) => setNewMethod({ ...newMethod, name: e.target.value })}
                 className="w-full text-xs px-2 py-1 border rounded"
@@ -342,13 +352,13 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
                   onClick={handleAddMethod}
                   className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
                 >
-                  Add
+                  Agregar
                 </button>
                 <button
                   onClick={() => setShowAddMethod(false)}
                   className="text-xs px-2 py-1 bg-gray-400 text-white rounded hover:bg-gray-500"
                 >
-                  Cancel
+                  Cancelar
                 </button>
               </div>
             </div>
@@ -358,7 +368,7 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
         {/* Methods list */}
         <div className="px-3 py-2 max-h-24 overflow-y-auto">
           {(!entity.methods || entity.methods.length === 0) ? (
-            <div className="text-gray-400 italic text-xs">No methods</div>
+            <div className="text-gray-400 italic text-xs">Sin métodos</div>
           ) : (
             entity.methods.map(method => (
               <div key={method.id} className="text-xs py-1 hover:bg-gray-50">

@@ -25,7 +25,7 @@ const UMLDiagramApp: React.FC = () => {
   // Estado del diagrama
   const [diagram, setDiagram] = useState<UMLDiagram>({
     id: 'diagram-1',
-    name: 'New UML Diagram',
+  name: 'Nuevo Diagrama UML',
     entities: [],
     relations: [],
     packages: [],
@@ -164,7 +164,7 @@ const UMLDiagramApp: React.FC = () => {
     console.log('Code structure:', codeStructure);
     
     // Aquí se implementaría la generación real del código
-    alert(`Generating code for:\n- ${entities.length} entities\n- ${intermediateEntities.length} intermediate tables\n- ${diagram.relations.length} relations\n\nCode generation will be implemented in the backend integration.`);
+  alert(`Generando código para:\n- ${entities.length} entidades\n- ${intermediateEntities.length} tablas intermedias\n- ${diagram.relations.length} relaciones\n\nLa generación de código se implementará en la integración con el backend.`);
   }, [diagram]);
 
   // Manejar diagrama generado por IA
@@ -223,9 +223,9 @@ const UMLDiagramApp: React.FC = () => {
                 modified: new Date()
               }
             });
-            alert('Diagram imported successfully!');
+            alert('¡Diagrama importado exitosamente!');
           } catch (error) {
-            alert('Error importing diagram. Please check the file format.');
+            alert('Error al importar el diagrama. Verifica el formato del archivo.');
           }
         };
         reader.readAsText(file);

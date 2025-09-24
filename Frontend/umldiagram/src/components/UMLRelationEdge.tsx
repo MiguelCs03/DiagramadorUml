@@ -6,6 +6,7 @@ import type { UMLRelation, RelationType } from '../types/uml';
 interface UMLRelationEdgeData {
   relation: UMLRelation;
   onUpdateRelation?: (updatedRelation: UMLRelation) => void;
+  onDeleteRelation?: () => void;
 }
 
 type UMLRelationEdgeProps = EdgeProps<UMLRelationEdgeData>;
@@ -21,7 +22,7 @@ const UMLRelationEdge: React.FC<UMLRelationEdgeProps> = ({
   data,
   selected
 }) => {
-  const { relation } = data || { relation: null };
+  const { relation, onDeleteRelation } = data || { relation: null };
   
   if (!relation) return null;
 
@@ -220,7 +221,7 @@ const UMLRelationEdge: React.FC<UMLRelationEdgeProps> = ({
             </div>
           )}
 
-          {/* Cardinalidades */}
+          {/* Cardinalidades y botón eliminar */}
           <div className="flex justify-between items-center min-w-[80px]">
             {/* Cardinalidad origen */}
             <div className="bg-yellow-100 px-1 border border-yellow-300 rounded text-xs font-bold text-gray-800">
@@ -233,8 +234,19 @@ const UMLRelationEdge: React.FC<UMLRelationEdgeProps> = ({
             </div>
 
             {/* Cardinalidad destino */}
-            <div className="bg-yellow-100 px-1 border border-yellow-300 rounded text-xs font-bold text-gray-800">
-              {relation.targetCardinality.label}
+            <div className="flex items-center space-x-1">
+              <div className="bg-yellow-100 px-1 border border-yellow-300 rounded text-xs font-bold text-gray-800">
+                {relation.targetCardinality.label}
+              </div>
+              {onDeleteRelation && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDeleteRelation(); }}
+                  className="text-red-600 hover:text-red-800 text-xs font-bold"
+                  title="Eliminar relación"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 

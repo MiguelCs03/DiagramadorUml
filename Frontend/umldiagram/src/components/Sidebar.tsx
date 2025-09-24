@@ -25,19 +25,19 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [activeSection, setActiveSection] = useState<string>('entities');
 
   const entityTypes: { type: EntityType; label: string; icon: string; description: string }[] = [
-    { type: 'class', label: 'Class', icon: '📦', description: 'Standard class' },
-    { type: 'abstract', label: 'Abstract Class', icon: '📋', description: 'Abstract class' },
-    { type: 'interface', label: 'Interface', icon: '🔌', description: 'Interface definition' },
-    { type: 'enum', label: 'Enumeration', icon: '📝', description: 'Enumeration type' },
+    { type: 'class', label: 'Clase', icon: '📦', description: 'Clase estándar' },
+    { type: 'abstract', label: 'Clase Abstracta', icon: '📋', description: 'Clase abstracta' },
+    { type: 'interface', label: 'Interfaz', icon: '🔌', description: 'Definición de interfaz' },
+    { type: 'enum', label: 'Enumeración', icon: '📝', description: 'Tipo enumerado' },
   ];
 
   const relationTypes: { type: RelationType; label: string; icon: string; description: string }[] = [
-    { type: 'association', label: 'Association', icon: '↔️', description: 'General association' },
-    { type: 'aggregation', label: 'Aggregation', icon: '◇', description: 'Weak "has-a" relationship' },
-    { type: 'composition', label: 'Composition', icon: '◆', description: 'Strong "part-of" relationship' },
-    { type: 'inheritance', label: 'Inheritance', icon: '▷', description: 'IS-A relationship' },
-    { type: 'implementation', label: 'Implementation', icon: '▷', description: 'Interface implementation' },
-    { type: 'dependency', label: 'Dependency', icon: '⋯▷', description: 'Dependency relationship' },
+    { type: 'association', label: 'Asociación', icon: '↔️', description: 'Asociación general' },
+    { type: 'aggregation', label: 'Agregación', icon: '◇', description: 'Relación "tiene-un" (débil)' },
+    { type: 'composition', label: 'Composición', icon: '◆', description: 'Relación "parte-de" (fuerte)' },
+    { type: 'inheritance', label: 'Herencia', icon: '▷', description: 'Relación ES-UN' },
+    { type: 'implementation', label: 'Implementación', icon: '▷', description: 'Implementación de interfaz' },
+    { type: 'dependency', label: 'Dependencia', icon: '⋯▷', description: 'Relación de dependencia' },
   ];
 
   const handleEntityClick = (type: EntityType) => {
@@ -53,7 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div className="w-64 bg-gray-50 border-r border-gray-200 h-full overflow-y-auto">
       <div className="p-4">
-        <h2 className="text-lg font-bold text-gray-800 mb-4">UML Diagram Editor</h2>
+  <h2 className="text-lg font-bold text-gray-800 mb-4">Editor de Diagramas UML</h2>
         
         {/* Navigation tabs */}
         <div className="flex mb-4 border-b border-gray-200">
@@ -65,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Entities
+            Entidades
           </button>
           <button
             onClick={() => setActiveSection('relations')}
@@ -75,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Relations
+            Relaciones
           </button>
           <button
             onClick={() => setActiveSection('tools')}
@@ -85,14 +85,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Tools
+            Herramientas
           </button>
         </div>
 
         {/* Entities Section */}
         {activeSection === 'entities' && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Create Entities</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Crear Entidades</h3>
             {entityTypes.map((entity) => (
               <button
                 key={entity.type}
@@ -119,9 +119,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Relations Section */}
         {activeSection === 'relations' && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Create Relations</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Crear Relaciones</h3>
             <div className="text-xs text-gray-600 mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
-              💡 Tip: Select a relation type, then click and drag from one entity to another to create the relationship.
+              💡 Consejo: Selecciona un tipo de relación, luego haz clic y arrastra desde una entidad hasta otra para crearla.
             </div>
             {relationTypes.map((relation) => (
               <button
@@ -149,18 +149,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Tools Section */}
         {activeSection === 'tools' && (
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Diagram Tools</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Herramientas del Diagrama</h3>
             
             {/* Diagram Actions */}
             <div className="space-y-2">
-              <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Diagram</h4>
+              <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Diagrama</h4>
               <button
                 onClick={onExportDiagram}
                 className="w-full p-2 text-left bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors"
               >
                 <div className="flex items-center space-x-2">
                   <span>📤</span>
-                  <span className="text-sm">Export Diagram</span>
+                  <span className="text-sm">Exportar Diagrama</span>
                 </div>
               </button>
               <button
@@ -169,14 +169,14 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center space-x-2">
                   <span>📥</span>
-                  <span className="text-sm">Import Diagram</span>
+                  <span className="text-sm">Importar Diagrama</span>
                 </div>
               </button>
             </div>
 
             {/* Code Generation */}
             <div className="space-y-2">
-              <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Code Generation</h4>
+              <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Generación de Código</h4>
               <button
                 onClick={onGenerateCode}
                 className="w-full p-3 text-left bg-gradient-to-r from-purple-500 to-blue-600 text-white rounded-lg hover:from-purple-600 hover:to-blue-700 transition-colors shadow-md"
@@ -184,8 +184,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center space-x-2">
                   <span>🚀</span>
                   <div>
-                    <div className="font-medium">Generate Spring Boot</div>
-                    <div className="text-xs opacity-90">Create DTOs, Models & CRUDs</div>
+                    <div className="font-medium">Generar Spring Boot</div>
+                    <div className="text-xs opacity-90">Crear DTOs, Modelos y CRUDs</div>
                   </div>
                 </div>
               </button>
@@ -193,28 +193,28 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             {/* Validation */}
             <div className="space-y-2">
-              <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Validation</h4>
+              <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Validación</h4>
               <button
                 onClick={() => onSelectTool('validate')}
                 className="w-full p-2 text-left bg-white border border-gray-200 rounded-lg hover:bg-yellow-50 hover:border-yellow-300 transition-colors"
               >
                 <div className="flex items-center space-x-2">
                   <span>✅</span>
-                  <span className="text-sm">Validate Diagram</span>
+                  <span className="text-sm">Validar Diagrama</span>
                 </div>
               </button>
             </div>
 
             {/* AI Assistant */}
             <div className="space-y-2">
-              <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">AI Assistant</h4>
+              <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Asistente IA</h4>
               <button
                 onClick={() => onSelectTool('ai-suggest')}
                 className="w-full p-2 text-left bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
               >
                 <div className="flex items-center space-x-2">
                   <span>🤖</span>
-                  <span className="text-sm">Suggest Improvements</span>
+                  <span className="text-sm">Sugerir Mejoras</span>
                 </div>
               </button>
               <button
@@ -223,7 +223,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center space-x-2">
                   <span>💬</span>
-                  <span className="text-sm">Open AI Chat</span>
+                  <span className="text-sm">Abrir Chat IA</span>
                 </div>
               </button>
             </div>
@@ -233,26 +233,26 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Selected Tool Indicator */}
         {selectedTool && (
           <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="text-xs font-medium text-blue-800 mb-1">Active Tool</div>
+            <div className="text-xs font-medium text-blue-800 mb-1">Herramienta Activa</div>
             <div className="text-sm text-blue-700 capitalize">{selectedTool.replace('-', ' ')}</div>
             <button
               onClick={() => onSelectTool(null)}
               className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
             >
-              Deselect Tool
+              Deseleccionar
             </button>
           </div>
         )}
 
         {/* Quick Help */}
         <div className="mt-6 p-3 bg-gray-100 border border-gray-200 rounded-lg">
-          <div className="text-xs font-medium text-gray-700 mb-2">Quick Help</div>
+          <div className="text-xs font-medium text-gray-700 mb-2">Ayuda Rápida</div>
           <ul className="text-xs text-gray-600 space-y-1">
-            <li>• Double-click entities to edit names</li>
-            <li>• Use + buttons to add attributes/methods</li>
-            <li>• Drag entities to reposition them</li>
-            <li>• Many-to-many relations create intermediate tables</li>
-            <li>• Use the AI assistant for suggestions</li>
+            <li>• Doble clic en entidades para editar nombres</li>
+            <li>• Usa los botones + para agregar atributos/métodos</li>
+            <li>• Arrastra entidades para reposicionarlas</li>
+            <li>• Relaciones muchos-a-muchos crean tablas intermedias</li>
+            <li>• Usa el asistente IA para sugerencias</li>
           </ul>
         </div>
       </div>

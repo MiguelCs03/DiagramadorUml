@@ -78,6 +78,12 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
             );
             onUpdateDiagram({ ...diagram, entities: updatedEntities });
           },
+          onDeleteEntity: () => {
+            // Eliminar entidad y relaciones asociadas
+            const remainingEntities = diagram.entities.filter(e => e.id !== entity.id);
+            const remainingRelations = diagram.relations.filter(r => r.source !== entity.id && r.target !== entity.id);
+            onUpdateDiagram({ ...diagram, entities: remainingEntities, relations: remainingRelations });
+          }
         },
       }));
     },
@@ -100,6 +106,10 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
             );
             onUpdateDiagram({ ...diagram, relations: updatedRelations });
           },
+          onDeleteRelation: () => {
+            const remainingRelations = diagram.relations.filter(r => r.id !== relation.id);
+            onUpdateDiagram({ ...diagram, relations: remainingRelations });
+          }
         },
       }));
     },
@@ -344,15 +354,15 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
         />
       </ReactFlow>
 
-      {/* Status bar */}
+      {/* Barra de estado */}
       <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 flex justify-between items-center text-sm text-gray-600">
-        <div>Entities: {diagram.entities.length} | Relations: {diagram.relations.length}</div>
+        <div>Entidades: {diagram.entities.length} | Relaciones: {diagram.relations.length}</div>
         {selectedTool && (
           <div className="flex items-center space-x-2">
-            <span className="text-blue-600 font-medium">Active Tool:</span>
+            <span className="text-blue-600 font-medium">Herramienta Activa:</span>
             <span className="capitalize">{selectedTool.replace('-', ' ')}</span>
             <button onClick={onClearTool} className="text-red-600 hover:text-red-800 ml-2">
-              Cancel
+              Cancelar
             </button>
           </div>
         )}
