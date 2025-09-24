@@ -98,6 +98,8 @@ export interface UMLEntity {
   type: EntityType;
   attributes: UMLAttribute[];
   methods: UMLMethod[];
+  // Posición en el lienzo (para colaboración en tiempo real)
+  position?: { x: number; y: number };
   isAbstract?: boolean;
   package?: string; // Para organización en paquetes
   stereotype?: string; // Estereotipos UML (<<entity>>, <<controller>>, etc.)
