@@ -5,6 +5,8 @@ import DiagramEditor from './DiagramEditor';
 import Sidebar from './Sidebar';
 import AIChatBot from './AIChatBot';
 import { VoiceChat } from './VoiceChat';
+import { CollaborationPanel } from './CollaborationPanel';
+import { useWebSocket } from '../hooks/useWebSocket';
 import type {
   UMLDiagram, 
   UMLEntity, 
@@ -38,16 +40,43 @@ const UMLDiagramApp: React.FC = () => {
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
 
   // Estado para controlar el panel lateral activo
-  const [activePanel, setActivePanel] = useState<'ai' | 'voice' | null>('ai');
+  const [activePanel, setActivePanel] = useState<'ai' | 'voice' | 'collab' | null>('ai');
+
+  // Hook de WebSocket para colaboración
+  const {
+    roomState,
+    sendDiagramUpdate,
+    onDiagramUpdate,
+    createRoom,
+    joinRoom,
+    leaveRoom
+  } = useWebSocket();
 
   // useEffect para detectar si estamos en el cliente
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  // Configurar callback para recibir actualizaciones de colaboración
+  useEffect(() => {
+    console.log('[Colaboración] useEffect configurando onDiagramUpdate');
+    onDiagramUpdate((receivedDiagram: UMLDiagram) => {
+      console.log('[Colaboración][RX] Diagrama recibido por WebSocket:', receivedDiagram);
+      setDiagram({
+        ...receivedDiagram,
+        metadata: {
+          created: receivedDiagram.metadata?.created || new Date(),
+          modified: new Date(),
+          version: receivedDiagram.metadata?.version || '1.0.0',
+          author: receivedDiagram.metadata?.author
+        }
+      });
+    });
+  }, [onDiagramUpdate]);
+
   // Manejar actualización del diagrama
   const handleUpdateDiagram = useCallback((updatedDiagram: UMLDiagram) => {
-    setDiagram({
+    const newDiagram = {
       ...updatedDiagram,
       metadata: {
         ...updatedDiagram.metadata,
@@ -55,8 +84,16 @@ const UMLDiagramApp: React.FC = () => {
         version: updatedDiagram.metadata?.version || '1.0.0',
         modified: new Date()
       }
-    });
-  }, []);
+    };
+    
+    setDiagram(newDiagram);
+    
+    // Enviar actualización a colaboradores si estamos en una sala
+    if (roomState.roomCode) {
+      console.log('[Colaboración][TX] Enviando actualización de diagrama a la sala', roomState.roomCode);
+      sendDiagramUpdate(newDiagram);
+    }
+  }, [roomState.roomCode, sendDiagramUpdate]);
 
   // Crear una nueva entidad
   const handleCreateEntity = useCallback((type: EntityType) => {
@@ -132,7 +169,7 @@ const UMLDiagramApp: React.FC = () => {
 
   // Manejar diagrama generado por IA
   const handleAIGeneratedDiagram = useCallback((newDiagram: UMLDiagram) => {
-    setDiagram({
+    const updatedDiagram = {
       ...newDiagram,
       metadata: {
         created: newDiagram.metadata?.created || new Date(),
@@ -140,8 +177,15 @@ const UMLDiagramApp: React.FC = () => {
         version: newDiagram.metadata?.version || '1.0.0',
         author: newDiagram.metadata?.author
       }
-    });
-  }, []);
+    };
+    
+    setDiagram(updatedDiagram);
+    
+    // Enviar actualización a colaboradores si estamos en una sala
+    if (roomState.roomCode) {
+      sendDiagramUpdate(updatedDiagram);
+    }
+  }, [roomState.roomCode, sendDiagramUpdate]);
 
   // Exportar diagrama como JSON
   const handleExportDiagram = useCallback(() => {
@@ -233,29 +277,44 @@ const UMLDiagramApp: React.FC = () => {
         </div>
       </div>
 
-      {/* Panel derecho con pestañas para IA y Voz */}
+      {/* Panel derecho con pestañas para IA, Voz y Colaboración */}
       <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
         {/* Pestañas */}
         <div className="flex border-b">
           <button
             onClick={() => setActivePanel(activePanel === 'ai' ? null : 'ai')}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
               activePanel === 'ai' 
                 ? 'bg-blue-500 text-white' 
                 : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
             }`}
           >
-            💬 Chat IA
+            💬 IA
           </button>
           <button
             onClick={() => setActivePanel(activePanel === 'voice' ? null : 'voice')}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
               activePanel === 'voice' 
                 ? 'bg-green-500 text-white' 
                 : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
             }`}
           >
             🎤 Voz
+          </button>
+          <button
+            onClick={() => setActivePanel(activePanel === 'collab' ? null : 'collab')}
+            className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+              activePanel === 'collab' 
+                ? 'bg-purple-500 text-white' 
+                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            🤝 Sala
+            {roomState.roomCode && (
+              <span className="ml-1 px-1 bg-purple-600 text-white text-xs rounded">
+                {roomState.clientCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -271,6 +330,23 @@ const UMLDiagramApp: React.FC = () => {
             <VoiceChat
               currentDiagram={diagram}
               onDiagramUpdate={handleAIGeneratedDiagram}
+            />
+          )}
+          {activePanel === 'collab' && (
+            <CollaborationPanel 
+              roomState={roomState}
+              createRoom={(d?: UMLDiagram) => {
+                console.log('[Colaboración][UI] Crear sala solicitado');
+                createRoom(d);
+              }}
+              joinRoom={(code: string) => {
+                console.log('[Colaboración][UI] Unirse a sala solicitado:', code);
+                joinRoom(code);
+              }}
+              leaveRoom={() => {
+                console.log('[Colaboración][UI] Salir de sala solicitado');
+                leaveRoom();
+              }}
             />
           )}
         </div>

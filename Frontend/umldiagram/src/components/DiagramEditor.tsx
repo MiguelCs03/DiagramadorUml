@@ -76,6 +76,7 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
           const updatedEntities = diagram.entities.map(e => 
             e.id === updatedEntity.id ? updatedEntity : e
           );
+          console.log('[DiagramEditor] Actualización enviada (entidad):', { ...diagram, entities: updatedEntities });
           onUpdateDiagram({ ...diagram, entities: updatedEntities });
         }
       }
@@ -95,6 +96,7 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
           const updatedRelations = diagram.relations.map(r => 
             r.id === updatedRelation.id ? updatedRelation : r
           );
+          console.log('[DiagramEditor] Actualización enviada (relación):', { ...diagram, relations: updatedRelations });
           onUpdateDiagram({ ...diagram, relations: updatedRelations });
         }
       }
@@ -103,6 +105,10 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
 
   // Actualizar nodos y bordes cuando cambie el diagrama
   useEffect(() => {
+    console.log('[DiagramEditor][RX] Props diagram changed:', {
+      entities: diagram.entities.length,
+      relations: diagram.relations.length,
+    });
     setNodes(convertEntitiesToNodes(diagram.entities));
     setEdges(convertRelationsToEdges(diagram.relations));
   }, [diagram.entities, diagram.relations, convertEntitiesToNodes, convertRelationsToEdges]);
@@ -142,9 +148,10 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
       }
     };
 
-    const updatedEntities = [...diagram.entities, newEntity];
-    onUpdateDiagram({ ...diagram, entities: updatedEntities });
-    setNodes(nds => [...nds, newNode]);
+  const updatedEntities = [...diagram.entities, newEntity];
+  console.log('[DiagramEditor] Actualización enviada (crear entidad):', { ...diagram, entities: updatedEntities });
+  onUpdateDiagram({ ...diagram, entities: updatedEntities });
+  setNodes(nds => [...nds, newNode]);
   }, [diagram, onUpdateDiagram]);
 
   // Crear nueva relación
@@ -234,7 +241,8 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
       }
     }
 
-    onUpdateDiagram({ ...diagram, entities: updatedEntities, relations: updatedRelations });
+  console.log('[DiagramEditor] Actualización enviada (crear relación):', { ...diagram, entities: updatedEntities, relations: updatedRelations });
+  onUpdateDiagram({ ...diagram, entities: updatedEntities, relations: updatedRelations });
   }, [diagram, onUpdateDiagram]);
 
   // Manejar conexiones entre nodos
@@ -271,6 +279,7 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
   return (
     <div className="w-full h-full relative">
       <ReactFlow
+        key={`${diagram.id}-${diagram.entities.length}-${diagram.relations.length}-${diagram.metadata?.modified?.toString?.()}`}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
