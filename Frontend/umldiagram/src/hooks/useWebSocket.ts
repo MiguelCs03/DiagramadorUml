@@ -101,9 +101,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
         if (error && error.type) {
           errorMsg += `Tipo: ${error.type}. `;
         }
-        if (error && error.message) {
-          errorMsg += `Mensaje: ${error.message}. `;
-        }
+        
         errorMsg += `URL: ${WS_URL}. Estado: ${wsRef.current?.readyState}`;
         console.error('❌ [WebSocket] ERROR DETALLADO:', error);
         console.error('❌ [WebSocket] URL que falló:', WS_URL);
