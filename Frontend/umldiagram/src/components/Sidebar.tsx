@@ -41,8 +41,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const handleEntityClick = (type: EntityType) => {
+    // Solo selecciona la herramienta; la creación ocurre con clic en el lienzo
     onSelectTool(`entity-${type}`);
-    onCreateEntity(type);
   };
 
   const handleRelationClick = (type: RelationType) => {
@@ -248,10 +248,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="mt-6 p-3 bg-gray-100 border border-gray-200 rounded-lg">
           <div className="text-xs font-medium text-gray-700 mb-2">Ayuda Rápida</div>
           <ul className="text-xs text-gray-600 space-y-1">
-            <li>• Doble clic en entidades para editar nombres</li>
-            <li>• Usa los botones + para agregar atributos/métodos</li>
+            <li>• Selecciona un tipo de entidad y luego haz clic en el lienzo para crearla</li>
+            <li>• Doble clic en una entidad para renombrarla</li>
+            <li>• Usa el botón + para agregar atributos</li>
             <li>• Arrastra entidades para reposicionarlas</li>
-            <li>• Relaciones muchos-a-muchos crean tablas intermedias</li>
+            <li>• Relaciones muchos-a-muchos crean tablas intermedias automáticamente</li>
             <li>• Usa el asistente IA para sugerencias</li>
           </ul>
         </div>

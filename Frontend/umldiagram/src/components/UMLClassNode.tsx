@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import type { UMLEntity, UMLAttribute, DataType, Visibility, UMLMethod } from '../types/uml';
+import type { UMLEntity, UMLAttribute, DataType, Visibility } from '../types/uml';
 
 interface UMLClassNodeData {
   entity: UMLEntity;
@@ -23,7 +23,6 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingAttribute, setEditingAttribute] = useState<string | null>(null);
   const [showAddAttribute, setShowAddAttribute] = useState(false);
-  const [showAddMethod, setShowAddMethod] = useState(false);
 
   // Estado para nuevos atributos
   const [newAttribute, setNewAttribute] = useState<Partial<UMLAttribute>>({
@@ -32,12 +31,6 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
     visibility: 'private'
   });
 
-  // Estado para nuevos métodos
-  const [newMethod, setNewMethod] = useState({
-    name: '',
-    returnType: 'void' as DataType | 'void',
-    visibility: 'public' as Visibility
-  });
 
   const handleUpdateEntity = useCallback((updates: Partial<UMLEntity>) => {
     if (onUpdateEntity) {
@@ -79,24 +72,7 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
     setEditingAttribute(null);
   }, [entity.attributes, handleUpdateEntity]);
 
-  const handleAddMethod = useCallback(() => {
-    if (newMethod.name) {
-      const method: UMLMethod = {
-        id: Date.now().toString(),
-        name: newMethod.name,
-        returnType: newMethod.returnType,
-        visibility: newMethod.visibility,
-        parameters: []
-      };
-      
-      handleUpdateEntity({
-        methods: [...(entity.methods || []), method]
-      });
-      
-      setNewMethod({ name: '', returnType: 'void', visibility: 'public' });
-      setShowAddMethod(false);
-    }
-  }, [newMethod, entity.methods, handleUpdateEntity]);
+  // Métodos eliminados: la UI y lógica de métodos se ha retirado según requerimiento.
 
   const getVisibilitySymbol = (visibility: Visibility): string => {
     switch (visibility) {
@@ -137,7 +113,10 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
       <Handle type="source" position={Position.Right} className="w-3 h-3 bg-blue-500" />
 
       {/* Header */}
-      <div className={`${getEntityTypeColor(entity.type || 'class')} text-white px-3 py-2 rounded-t-lg relative`}>
+      <div
+        className={`${getEntityTypeColor(entity.type || 'class')} text-white px-3 py-2 rounded-t-lg relative`}
+        onDoubleClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+      >
         {onDeleteEntity && (
           <button
             onClick={(e) => { e.stopPropagation(); onDeleteEntity(); }}
@@ -153,24 +132,28 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
         {getEntityTypeLabel(entity.type || 'class') && (
           <div className="text-xs italic text-center">{getEntityTypeLabel(entity.type || 'class')}</div>
         )}
-        <div className="font-bold text-center">
+        <div className="font-bold text-center select-none">
+          {!isEditing && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+              className="absolute left-1 top-1 text-[10px] bg-white/20 hover:bg-white/30 px-1 py-0.5 rounded border border-white/30"
+              title="Editar nombre"
+            >
+              ✎
+            </button>
+          )}
           {isEditing ? (
             <input
               type="text"
               value={entity.name}
               onChange={(e) => handleUpdateEntity({ name: e.target.value })}
-              onBlur={() => setIsEditing(false)}
-              onKeyDown={(e) => e.key === 'Enter' && setIsEditing(false)}
-              className="bg-transparent border-b border-white text-center w-full text-white placeholder-gray-200"
+              onBlur={(e) => { e.stopPropagation(); setIsEditing(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); setIsEditing(false); } }}
+              className="bg-white/20 border-b border-white text-center w-full text-white placeholder-gray-200 outline-none"
               autoFocus
             />
           ) : (
-            <span 
-              onDoubleClick={() => setIsEditing(true)}
-              className="cursor-pointer"
-            >
-              {entity.name}
-            </span>
+            <span className="cursor-text">{entity.name || 'NombreClase'}</span>
           )}
         </div>
       </div>
@@ -302,84 +285,7 @@ const UMLClassNode: React.FC<UMLClassNodeProps> = ({ data, selected }) => {
         </div>
       </div>
 
-      {/* Methods Section */}
-      <div>
-        <div className="px-3 py-1 bg-gray-50 text-xs font-semibold text-gray-700 flex justify-between items-center">
-          <span>Métodos</span>
-          <button
-            onClick={() => setShowAddMethod(!showAddMethod)}
-            className="text-blue-600 hover:text-blue-800 text-lg font-bold"
-            title="Agregar método"
-          >
-            +
-          </button>
-        </div>
-
-        {/* Add new method form */}
-        {showAddMethod && (
-          <div className="px-3 py-2 bg-green-50 border-b border-green-200">
-            <div className="space-y-2">
-              <input
-                type="text"
-                placeholder="Nombre del método"
-                value={newMethod.name}
-                onChange={(e) => setNewMethod({ ...newMethod, name: e.target.value })}
-                className="w-full text-xs px-2 py-1 border rounded"
-              />
-              <div className="flex space-x-1">
-                <select
-                  value={newMethod.visibility}
-                  onChange={(e) => setNewMethod({ ...newMethod, visibility: e.target.value as Visibility })}
-                  className="text-xs px-1 py-1 border rounded flex-1"
-                >
-                  {VISIBILITIES.map(vis => (
-                    <option key={vis} value={vis}>{vis}</option>
-                  ))}
-                </select>
-                <select
-                  value={newMethod.returnType}
-                  onChange={(e) => setNewMethod({ ...newMethod, returnType: e.target.value as DataType | 'void' })}
-                  className="text-xs px-1 py-1 border rounded flex-2"
-                >
-                  <option value="void">void</option>
-                  {DATA_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex space-x-1">
-                <button
-                  onClick={handleAddMethod}
-                  className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
-                >
-                  Agregar
-                </button>
-                <button
-                  onClick={() => setShowAddMethod(false)}
-                  className="text-xs px-2 py-1 bg-gray-400 text-white rounded hover:bg-gray-500"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Methods list */}
-        <div className="px-3 py-2 max-h-24 overflow-y-auto">
-          {(!entity.methods || entity.methods.length === 0) ? (
-            <div className="text-gray-400 italic text-xs">Sin métodos</div>
-          ) : (
-            entity.methods.map(method => (
-              <div key={method.id} className="text-xs py-1 hover:bg-gray-50">
-                <span className="font-mono">{getVisibilitySymbol(method.visibility)}</span>
-                <span>{method.name}()</span>
-                <span className="text-green-600">: {method.returnType}</span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      {/* Sección de métodos eliminada */}
     </div>
   );
 };
