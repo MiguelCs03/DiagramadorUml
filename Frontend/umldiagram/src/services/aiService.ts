@@ -1,9 +1,9 @@
 import type { UMLDiagram, UMLEntity, UMLRelation, DataType, Visibility, RelationType, EntityType } from '../types/uml';
 import { CardinalityUtils } from '../types/uml';
 
-// Groq API Configuration
-const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY || '';
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+// OpenAI API Configuration
+const OPENAI_API_KEY = process.env.NEXT_PUBLIC_OPENAI_API_KEY || '';
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 export interface DiagramGenerationRequest {
   description: string;
@@ -90,29 +90,31 @@ export class AIService {
     try {
       const prompt = this.createPrompt(request);
       
-      const response = await fetch(GROQ_API_URL, {
+  const response = await fetch(OPENAI_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           messages: [
             {
               role: "system",
-              content: `You are an expert UML diagram designer. Your task is to generate UML class diagrams based on the user's description. 
+              content: `Eres un experto en diseño de diagramas UML. Tu tarea es generar diagramas UML de clases según la descripción del usuario.
 
-You can create diagrams with ANY NUMBER of entities as specified by the user. If they mention a specific number, create exactly that many. If they don't specify, create a comprehensive diagram with as many entities as needed to properly model the system.
+Puedes crear diagramas con CUALQUIER CANTIDAD de entidades según lo que pida el usuario. Si menciona un número específico, crea exactamente esa cantidad. Si no lo especifica, crea un diagrama completo con tantas entidades como se necesiten para modelar bien el sistema.
 
-IMPORTANT: Respond ONLY with valid JSON in the exact format specified below. Do not include any explanations, markdown formatting, or additional text.
+RESTRICCIÓN IMPORTANTE: Todas las entidades deben ser de tipo 'class'. NO uses tipos de entidad 'interface', 'abstract' o 'enum'. Si los necesitaras, conviértelos a entidades 'class'.
 
-Expected JSON format:
+IMPORTANTE: Responde SOLO con JSON válido en el formato exacto indicado abajo. No incluyas explicaciones, markdown ni texto adicional.
+
+Formato JSON esperado:
 {
   "entities": [
     {
       "id": "unique_id",
       "name": "ClassName",
-      "type": "class|interface|abstract|enum",
+      "type": "class",
       "position": {"x": number, "y": number},
       "attributes": [
         {
@@ -143,25 +145,25 @@ Expected JSON format:
   ]
 }
 
-Generate realistic and meaningful class diagrams with:
-- Create as many entities as needed or specified by the user
-- Proper inheritance hierarchies where applicable
-- Appropriate relationships between classes
-- Realistic attributes and methods for each class
-- Proper visibility modifiers
-- Logical positioning (try to space entities evenly)
+Genera diagramas realistas y coherentes con:
+- Tantas entidades como se necesiten o haya pedido el usuario
+- Jerarquías de herencia donde aplique
+- Relaciones apropiadas entre clases
+- Atributos y métodos realistas por clase
+- Modificadores de visibilidad adecuados
+- Posicionamiento lógico (intenta espaciar las entidades)
 
-Available types: String, int, boolean, double, float, long, char, Date, List<T>, Set<T>, Map<K,V>
-Available visibilities: public, private, protected, package
-Available entity types: class, interface, abstract, enum
-Available relation types: inheritance, composition, aggregation, association, dependency, implementation`
+Tipos disponibles: String, int, boolean, double, float, long, char, Date, List<T>, Set<T>, Map<K,V>
+Visibilidades disponibles: public, private, protected, package
+Tipos de entidad disponibles: class (ÚNICAMENTE)
+Tipos de relación disponibles: inheritance, composition, aggregation, association, dependency, implementation`
             },
             {
               role: "user",
               content: prompt
             }
           ],
-          model: "llama-3.1-8b-instant",
+          model: "gpt-3.5-turbo",
           temperature: 0.7,
           max_tokens: 4000,
           top_p: 1,
@@ -170,14 +172,14 @@ Available relation types: inheritance, composition, aggregation, association, de
       });
 
       if (!response.ok) {
-        throw new Error(`Groq API error: ${response.status} ${response.statusText}`);
+  throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
 
       if (!content) {
-        throw new Error('No content received from Groq API');
+  throw new Error('No content received from OpenAI API');
       }
 
       console.log('AI Response:', content);
@@ -186,7 +188,7 @@ Available relation types: inheritance, composition, aggregation, association, de
       const parsedResponse = this.parseAIResponse(content);
       
       if (!parsedResponse) {
-        throw new Error('Failed to parse AI response as valid JSON');
+  throw new Error('Failed to parse OpenAI response as valid JSON');
       }
 
       // Convert to UML diagram format
@@ -199,10 +201,10 @@ Available relation types: inheritance, composition, aggregation, association, de
       };
 
     } catch (error) {
-      console.error('Error generating diagram:', error);
+  console.error('Error generating diagram:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+  error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
   }
@@ -210,16 +212,16 @@ Available relation types: inheritance, composition, aggregation, association, de
   // Nueva función para modificaciones incrementales (YAGNI - solo lo que necesitamos)
   static async modifyDiagram(request: DiagramModificationRequest): Promise<DiagramModificationResponse> {
     try {
-      const systemPrompt = `You are a UML diagram modification assistant. Modify existing diagrams based on user commands.
+      const systemPrompt = `Eres un asistente para modificar diagramas UML. Modifica diagramas existentes según los comandos del usuario.
 
-CURRENT DIAGRAM ENTITIES: ${request.currentDiagram.entities.map(e => e.name).join(', ')}
+ENTIDADES DEL DIAGRAMA ACTUAL: ${request.currentDiagram.entities.map(e => e.name).join(', ')}
 
-Your task is to understand the user's command and provide ONLY the specific modifications needed.
+Tu tarea es entender el comando del usuario y proporcionar SOLO las modificaciones específicas necesarias.
 
-IMPORTANT: Respond ONLY with valid JSON in this format:
+IMPORTANTE: Responde SOLO con JSON válido en este formato:
 {
   "action": "add|modify|delete",
-  "message": "Brief description of what was done",
+  "message": "Descripción breve de lo realizado",
   "changes": {
     "newEntities": [
       {
@@ -255,16 +257,16 @@ IMPORTANT: Respond ONLY with valid JSON in this format:
   }
 }
 
-For ADD commands: Create new entities/relations
-For MODIFY commands: Update existing entities
-For DELETE commands: Remove entities/relations
+Para comandos ADD: crear nuevas entidades/relaciones
+Para comandos MODIFY: actualizar entidades existentes
+Para comandos DELETE: eliminar entidades/relaciones
 
-Keep modifications minimal and focused only on what the user requested.`;
+Mantén las modificaciones mínimas y enfocadas solo a lo que pidió el usuario.`;
 
-      const response = await fetch(GROQ_API_URL, {
+  const response = await fetch(OPENAI_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -272,7 +274,7 @@ Keep modifications minimal and focused only on what the user requested.`;
             { role: "system", content: systemPrompt },
             { role: "user", content: request.command }
           ],
-          model: "llama-3.1-8b-instant",
+          model: "gpt-3.5-turbo",
           temperature: 0.3,
           max_tokens: 1500,
           stream: false
@@ -280,21 +282,21 @@ Keep modifications minimal and focused only on what the user requested.`;
       });
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+  throw new Error(`OpenAI API error: ${response.status}`);
       }
 
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
 
       if (!content) {
-        throw new Error('No content received');
+  throw new Error('No content received from OpenAI API');
       }
 
       console.log('AI Modification Response:', content);
 
       const parsedResponse = this.parseAIResponse(content);
       if (!parsedResponse) {
-        throw new Error('Failed to parse AI response');
+  throw new Error('Failed to parse OpenAI response');
       }
 
       const updatedDiagram = this.applyModificationsToDiagram(request.currentDiagram, parsedResponse.changes);
@@ -307,10 +309,10 @@ Keep modifications minimal and focused only on what the user requested.`;
       };
 
     } catch (error) {
-      console.error('Error modifying diagram:', error);
+  console.error('Error modifying diagram:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Error desconocido'
+  error: error instanceof Error ? error.message : 'Error desconocido'
       };
     }
   }
@@ -414,31 +416,34 @@ Keep modifications minimal and focused only on what the user requested.`;
   }
 
   private static createPrompt(request: DiagramGenerationRequest): string {
-    let prompt = `Generate a UML class diagram for: ${request.description}`;
+  let prompt = `Genera un diagrama UML de clases para: ${request.description}`;
     
     if (request.businessContext) {
-      prompt += `\n\nBusiness Context: ${request.businessContext}`;
+  prompt += `\n\nContexto de negocio: ${request.businessContext}`;
     }
     
     if (request.additionalRequirements) {
-      prompt += `\n\nAdditional Requirements: ${request.additionalRequirements}`;
+  prompt += `\n\nRequisitos adicionales: ${request.additionalRequirements}`;
     }
 
     // Detectar si el usuario especifica número de entidades
     const numberMatch = request.description.match(/(\d+)\s*(tabla|clase|entidad|entity|table|class)/i);
     if (numberMatch) {
       const count = numberMatch[1];
-      prompt += `\n\nIMPORTANT: Create exactly ${count} entities as requested by the user.`;
+  prompt += `\n\nIMPORTANTE: Crea exactamente ${count} entidades como solicitó el usuario.`;
     }
 
-    prompt += `\n\nGenerate a complete and comprehensive diagram with:
-- As many entities as needed to properly model the system (don't limit to 5)
-- Proper entity relationships (inheritance, composition, association, etc.)
-- Realistic attributes with appropriate data types
-- Key methods for each class
-- Proper visibility modifiers
-- Position entities in a logical layout
-- Include all necessary supporting classes and relationships`;
+  prompt += `\n\nGenera un diagrama completo y coherente con:
+- Tantas entidades como se necesiten para modelar el sistema (no limites a 5)
+- Relaciones correctas entre entidades (herencia, composición, asociación, etc.)
+- Atributos realistas con tipos de datos apropiados
+- Métodos clave por clase
+- Modificadores de visibilidad adecuados
+- Posicionamiento lógico de entidades
+- Incluye las clases y relaciones de soporte necesarias`;
+    
+  // Hard constraint: Only class entities
+  prompt += `\n\nCRÍTICO: Todas las entidades DEBEN ser de tipo 'class'. No produzcas entidades de tipo interface, abstract o enum.`;
 
     return prompt;
   }
@@ -538,12 +543,9 @@ Keep modifications minimal and focused only on what the user requested.`;
   }
 
   private static mapEntityType(type: string): EntityType {
-    switch (type?.toLowerCase()) {
-      case 'interface': return 'interface';
-      case 'abstract': return 'abstract';
-      case 'enum': return 'enum';
-      default: return 'class';
-    }
+    // Constraint: we only allow 'class' entities in the editor.
+    // No matter what the AI proposes, coerce to 'class'.
+    return 'class';
   }
 
   private static mapDataType(type: string): DataType {
@@ -595,16 +597,16 @@ Keep modifications minimal and focused only on what the user requested.`;
   // Chat functionality for conversational AI
   static async sendMessage(message: string, context?: UMLDiagram): Promise<{success: boolean, response?: string, error?: string}> {
     try {
-      let systemPrompt = `You are an expert UML diagram assistant. Help users understand, modify, and improve their UML diagrams. 
+  let systemPrompt = `Eres un asistente experto en diagramas UML. Ayuda a los usuarios a entender, modificar y mejorar sus diagramas UML.
       
-You can:
-- Explain UML concepts and relationships
-- Suggest improvements to existing diagrams
-- Answer questions about diagram structure
-- Provide best practices for UML design
-- Help with specific entity or relationship modifications
+Puedes:
+- Explicar conceptos y relaciones UML
+- Sugerir mejoras a diagramas existentes
+- Responder preguntas sobre la estructura del diagrama
+- Proveer buenas prácticas de diseño UML
+- Ayudar con modificaciones específicas de entidades o relaciones
 
-Be helpful, concise, and technically accurate. If the user asks you to generate a new diagram, remind them to use the diagram generation feature instead.`;
+Sé útil, conciso y técnicamente preciso. Si el usuario te pide generar un nuevo diagrama, recuérdale usar la función de generación de diagramas.`;
 
       if (context) {
         systemPrompt += `\n\nCurrent diagram context:
@@ -613,10 +615,10 @@ Be helpful, concise, and technically accurate. If the user asks you to generate 
 - Relations: ${context.relations.length}`;
       }
 
-      const response = await fetch(GROQ_API_URL, {
+  const response = await fetch(OPENAI_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -630,7 +632,7 @@ Be helpful, concise, and technically accurate. If the user asks you to generate 
               content: message
             }
           ],
-          model: "llama-3.1-8b-instant",
+          model: "gpt-3.5-turbo",
           temperature: 0.7,
           max_tokens: 1000,
           top_p: 1,
@@ -639,14 +641,14 @@ Be helpful, concise, and technically accurate. If the user asks you to generate 
       });
 
       if (!response.ok) {
-        throw new Error(`Groq API error: ${response.status} ${response.statusText}`);
+  throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
 
       if (!content) {
-        throw new Error('No response received from AI');
+  throw new Error('No response received from OpenAI API');
       }
 
       return {
@@ -655,10 +657,10 @@ Be helpful, concise, and technically accurate. If the user asks you to generate 
       };
 
     } catch (error) {
-      console.error('Error sending message to AI:', error);
+  console.error('Error sending message to OpenAI:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+  error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
   }
@@ -672,34 +674,34 @@ Entities: ${diagram.entities.map(e => `${e.name} (${e.type})`).join(', ')}
 Relations: ${diagram.relations.map(r => `${r.source} -> ${r.target} (${r.type})`).join(', ')}
       `;
 
-      const response = await fetch(GROQ_API_URL, {
+  const response = await fetch(OPENAI_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           messages: [
             {
               role: "system",
-              content: `You are an expert UML diagram reviewer. Analyze the provided UML diagram and suggest specific improvements. Focus on:
-- Design patterns that could be applied
-- Missing relationships or entities
-- Better entity organization
-- Normalization improvements
-- Code generation optimization
+              content: `Eres un revisor experto de diagramas UML. Analiza el diagrama UML proporcionado y sugiere mejoras específicas. Enfócate en:
+- Patrones de diseño aplicables
+- Relaciones o entidades faltantes
+- Mejor organización de entidades
+- Mejoras de normalización
+- Optimización para generación de código
 
-Provide 3-5 specific, actionable suggestions. Return only a JSON array of strings, no additional formatting.
+Proporciona 3-5 sugerencias específicas y accionables. Devuelve solo un arreglo JSON de strings, sin formato adicional.
 
-Example response format:
-["Consider adding a BaseEntity class for common attributes like id and timestamps", "The User-Order relationship should be bidirectional", "Add a PaymentStatus enum for better order state management"]`
+Formato de respuesta de ejemplo:
+["Considera agregar una clase BaseEntity con atributos comunes como id y timestamps", "La relación User-Order debería ser bidireccional", "Agrega un enum PaymentStatus para mejorar el estado de los pedidos"]`
             },
             {
               role: "user",
               content: `Please analyze this UML diagram and suggest improvements: ${diagramSummary}`
             }
           ],
-          model: "llama-3.1-8b-instant",
+          model: "gpt-3.5-turbo",
           temperature: 0.7,
           max_tokens: 1000,
           top_p: 1,
@@ -708,14 +710,14 @@ Example response format:
       });
 
       if (!response.ok) {
-        throw new Error(`Groq API error: ${response.status} ${response.statusText}`);
+  throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
 
       if (!content) {
-        throw new Error('No response received from AI');
+  throw new Error('No response received from OpenAI API');
       }
 
       // Try to parse as JSON array
@@ -739,10 +741,10 @@ Example response format:
       const systemPrompt = this.createVoiceSystemPrompt(request.currentDiagram);
       const userPrompt = this.createVoiceUserPrompt(request);
 
-      const response = await fetch(GROQ_API_URL, {
+  const response = await fetch(OPENAI_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -750,7 +752,7 @@ Example response format:
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
-          model: "llama-3.1-8b-instant",
+          model: "gpt-3.5-turbo",
           temperature: 0.3,
           max_tokens: 2000,
           stream: false
@@ -758,14 +760,14 @@ Example response format:
       });
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        throw new Error(`OpenAI API error: ${response.status}`);
       }
 
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
 
       if (!content) {
-        throw new Error('No content received');
+        throw new Error('No content received from OpenAI API');
       }
 
       return this.parseVoiceResponse(content, request.currentDiagram);

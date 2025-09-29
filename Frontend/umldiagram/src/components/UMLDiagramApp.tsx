@@ -96,11 +96,15 @@ const UMLDiagramApp: React.FC = () => {
   }, [roomState.roomCode, sendDiagramUpdate]);
 
   // Crear una nueva entidad
-  const handleCreateEntity = useCallback((type: EntityType) => {
+  const handleCreateEntity = useCallback((_type: EntityType) => {
+    // Siempre crear como clase estándar
+    const baseName = 'Clase';
+    const existing = diagram.entities.filter(e => e.name.startsWith(baseName));
+    const nextIndex = existing.length + 1;
     const newEntity: UMLEntity = {
       id: `entity-${Date.now()}`,
-      name: `New${type.charAt(0).toUpperCase() + type.slice(1)}`,
-      type,
+      name: `${baseName}${nextIndex}`,
+      type: 'class',
       attributes: [],
       methods: []
     };

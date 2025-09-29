@@ -2,6 +2,7 @@
 import React from 'react';
 import { EdgeProps, getBezierPath, BaseEdge, EdgeLabelRenderer } from 'reactflow';
 import type { UMLRelation, RelationType } from '../types/uml';
+import { CardinalityUtils } from '../types/uml';
 
 interface UMLRelationEdgeData {
   relation: UMLRelation;
@@ -23,6 +24,8 @@ const UMLRelationEdge: React.FC<UMLRelationEdgeProps> = ({
   selected
 }) => {
   const { relation, onDeleteRelation } = data || { relation: null };
+  const [editSource, setEditSource] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState(false);
   
   if (!relation) return null;
 
@@ -76,6 +79,20 @@ const UMLRelationEdge: React.FC<UMLRelationEdgeProps> = ({
       case 'association': return 'associated with';
       default: return '';
     }
+  };
+
+  const CARDINALITY_VALUES = ['1', '0..1', '1..*', '0..*', '*'] as const;
+
+  const updateSourceCardinality = (value: string) => {
+    if (!data?.onUpdateRelation) return;
+    const info = CardinalityUtils.parseCardinality(value as any);
+    data.onUpdateRelation({ ...relation, sourceCardinality: info });
+  };
+
+  const updateTargetCardinality = (value: string) => {
+    if (!data?.onUpdateRelation) return;
+    const info = CardinalityUtils.parseCardinality(value as any);
+    data.onUpdateRelation({ ...relation, targetCardinality: info });
   };
 
   return (
@@ -222,10 +239,31 @@ const UMLRelationEdge: React.FC<UMLRelationEdgeProps> = ({
           )}
 
           {/* Cardinalidades y botón eliminar */}
-          <div className="flex justify-between items-center min-w-[80px]">
+          <div className="flex justify-between items-center min-w-[110px] space-x-1">
             {/* Cardinalidad origen */}
-            <div className="bg-yellow-100 px-1 border border-yellow-300 rounded text-xs font-bold text-gray-800">
-              {relation.sourceCardinality.label}
+            <div className="flex items-center">
+              {editSource ? (
+                <select
+                  autoFocus
+                  className="text-xs border border-yellow-300 rounded bg-yellow-50 px-1 py-0.5"
+                  defaultValue={relation.sourceCardinality.label}
+                  onChange={(e) => { updateSourceCardinality(e.target.value); setEditSource(false); }}
+                  onBlur={() => setEditSource(false)}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {CARDINALITY_VALUES.map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  className="bg-yellow-100 px-1 border border-yellow-300 rounded text-xs font-bold text-gray-800"
+                  onClick={(e) => { e.stopPropagation(); setEditSource(true); }}
+                  title="Editar cardinalidad (origen)"
+                >
+                  {relation.sourceCardinality.label}
+                </button>
+              )}
             </div>
 
             {/* Tipo de relación */}
@@ -235,9 +273,28 @@ const UMLRelationEdge: React.FC<UMLRelationEdgeProps> = ({
 
             {/* Cardinalidad destino */}
             <div className="flex items-center space-x-1">
-              <div className="bg-yellow-100 px-1 border border-yellow-300 rounded text-xs font-bold text-gray-800">
-                {relation.targetCardinality.label}
-              </div>
+              {editTarget ? (
+                <select
+                  autoFocus
+                  className="text-xs border border-yellow-300 rounded bg-yellow-50 px-1 py-0.5"
+                  defaultValue={relation.targetCardinality.label}
+                  onChange={(e) => { updateTargetCardinality(e.target.value); setEditTarget(false); }}
+                  onBlur={() => setEditTarget(false)}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {CARDINALITY_VALUES.map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  className="bg-yellow-100 px-1 border border-yellow-300 rounded text-xs font-bold text-gray-800"
+                  onClick={(e) => { e.stopPropagation(); setEditTarget(true); }}
+                  title="Editar cardinalidad (destino)"
+                >
+                  {relation.targetCardinality.label}
+                </button>
+              )}
               {onDeleteRelation && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onDeleteRelation(); }}

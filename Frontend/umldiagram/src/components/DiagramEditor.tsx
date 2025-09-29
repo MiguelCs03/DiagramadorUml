@@ -101,10 +101,87 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
         data: {
           relation,
           onUpdateRelation: (updatedRelation: UMLRelation) => {
-            const updatedRelations = diagram.relations.map((r) =>
+            let updatedRelations = diagram.relations.map((r) =>
               r.id === updatedRelation.id ? updatedRelation : r
             );
-            onUpdateDiagram({ ...diagram, relations: updatedRelations });
+            let updatedEntities = [...diagram.entities];
+
+            // Si se convierte en muchos-a-muchos (asociación), ofrecer materializar tabla intermedia
+            const shouldMaterialize =
+              updatedRelation.type === 'association' &&
+              CardinalityUtils.isManyToMany(updatedRelation);
+
+            if (shouldMaterialize) {
+              const alreadyMaterialized = updatedEntities.some(
+                (e) => e.isGenerated && e.generatedFrom?.includes(updatedRelation.id)
+              );
+
+              if (!alreadyMaterialized) {
+                const confirmMat = typeof window !== 'undefined'
+                  ? window.confirm('La relación es muchos-a-muchos. ¿Deseas crear una tabla intermedia automáticamente?')
+                  : true;
+
+                if (confirmMat) {
+                  const sourceEntity = updatedEntities.find((e) => e.id === updatedRelation.source);
+                  const targetEntity = updatedEntities.find((e) => e.id === updatedRelation.target);
+
+                  if (sourceEntity && targetEntity) {
+                    const intermediateEntity: UMLEntity = {
+                      id: `intermediate-${Date.now()}`,
+                      name: `${sourceEntity.name}_${targetEntity.name}`,
+                      type: 'intermediate',
+                      attributes: [
+                        {
+                          id: `attr-${Date.now()}-1`,
+                          name: `${sourceEntity.name.toLowerCase()}Id`,
+                          type: 'Long',
+                          visibility: 'private',
+                          isKey: true,
+                        },
+                        {
+                          id: `attr-${Date.now()}-2`,
+                          name: `${targetEntity.name.toLowerCase()}Id`,
+                          type: 'Long',
+                          visibility: 'private',
+                          isKey: true,
+                        },
+                      ],
+                      methods: [],
+                      isGenerated: true,
+                      generatedFrom: [updatedRelation.id],
+                    };
+
+                    updatedEntities = [...updatedEntities, intermediateEntity];
+
+                    const sourceToIntermediate: UMLRelation = {
+                      id: `relation-${Date.now()}-1`,
+                      source: updatedRelation.source,
+                      target: intermediateEntity.id,
+                      type: 'association',
+                      sourceCardinality: CardinalityUtils.parseCardinality('1'),
+                      targetCardinality: CardinalityUtils.parseCardinality('0..*'),
+                      isNavigable: { source: true, target: true },
+                    };
+
+                    const intermediateToTarget: UMLRelation = {
+                      id: `relation-${Date.now()}-2`,
+                      source: intermediateEntity.id,
+                      target: updatedRelation.target,
+                      type: 'association',
+                      sourceCardinality: CardinalityUtils.parseCardinality('0..*'),
+                      targetCardinality: CardinalityUtils.parseCardinality('1'),
+                      isNavigable: { source: true, target: true },
+                    };
+
+                    // Remover la relación original ya materializada
+                    updatedRelations = updatedRelations.filter((r) => r.id !== updatedRelation.id);
+                    updatedRelations.push(sourceToIntermediate, intermediateToTarget);
+                  }
+                }
+              }
+            }
+
+            onUpdateDiagram({ ...diagram, entities: updatedEntities, relations: updatedRelations });
           },
           onDeleteRelation: () => {
             const remainingRelations = diagram.relations.filter(r => r.id !== relation.id);
@@ -228,7 +305,7 @@ const DiagramEditorInner: React.FC<DiagramEditorProps> = ({
         if (sourceEntity && targetEntity) {
           const intermediateEntity: UMLEntity = {
             id: `intermediate-${Date.now()}`,
-            name: `${sourceEntity.name}${targetEntity.name}`,
+            name: `${sourceEntity.name}_${targetEntity.name}`,
             type: 'intermediate',
             attributes: [
               {

@@ -25,10 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [activeSection, setActiveSection] = useState<string>('entities');
 
   const entityTypes: { type: EntityType; label: string; icon: string; description: string }[] = [
-    { type: 'class', label: 'Clase', icon: '📦', description: 'Clase estándar' },
-    { type: 'abstract', label: 'Clase Abstracta', icon: '📋', description: 'Clase abstracta' },
-    { type: 'interface', label: 'Interfaz', icon: '🔌', description: 'Definición de interfaz' },
-    { type: 'enum', label: 'Enumeración', icon: '📝', description: 'Tipo enumerado' },
+    { type: 'class', label: 'Clase', icon: '📦', description: 'Entidad de dominio' },
   ];
 
   const relationTypes: { type: RelationType; label: string; icon: string; description: string }[] = [
