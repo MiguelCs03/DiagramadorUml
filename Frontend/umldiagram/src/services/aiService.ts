@@ -1,9 +1,13 @@
 import type { UMLDiagram, UMLEntity, UMLRelation, DataType, Visibility, RelationType, EntityType } from '../types/uml';
 import { CardinalityUtils } from '../types/uml';
 
-// OpenAI API Configuration
-const OPENAI_API_KEY = process.env.NEXT_PUBLIC_OPENAI_API_KEY || '';
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+// GROQ API Configuration
+const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY || '';
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+// OpenAI API Configuration (comentado para revertir fácil)
+// const OPENAI_API_KEY = process.env.NEXT_PUBLIC_OPENAI_API_KEY || '';
+// const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 export interface DiagramGenerationRequest {
   description: string;
@@ -87,112 +91,123 @@ export class AIService {
   }
 
   static async generateDiagram(request: DiagramGenerationRequest): Promise<DiagramGenerationResponse> {
+    console.log('🚀 [AI Service] Iniciando generación de diagrama:', request);
+    
+    if (!GROQ_API_KEY) {
+      console.error('❌ [AI Service] GROQ_API_KEY no está configurada');
+      return {
+        success: false,
+        error: 'La clave de API de Groq no está configurada. Por favor, configura la variable de entorno.'
+      };
+    }
+
     try {
       const prompt = this.createPrompt(request);
+      console.log('📝 [AI Service] Prompt generado:', prompt);
       
-  const response = await fetch(OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: "system",
-              content: `Eres un experto en diseño de diagramas UML. Tu tarea es generar diagramas UML de clases según la descripción del usuario.
+      // Nuevo prompt en español, más tolerante y con ejemplos
+      const systemPrompt = `Eres un asistente experto en UML. Tu tarea es crear diagramas de clases/tablas en español según la descripción del usuario.
 
-Puedes crear diagramas con CUALQUIER CANTIDAD de entidades según lo que pida el usuario. Si menciona un número específico, crea exactamente esa cantidad. Si no lo especifica, crea un diagrama completo con tantas entidades como se necesiten para modelar bien el sistema.
+Responde SIEMPRE con clases y atributos en español, usando nombres intuitivos y realistas.
 
-RESTRICCIÓN IMPORTANTE: Todas las entidades deben ser de tipo 'class'. NO uses tipos de entidad 'interface', 'abstract' o 'enum'. Si los necesitaras, conviértelos a entidades 'class'.
+Si el usuario no indica el número de clases/tablas, elige automáticamente una cantidad razonable (por ejemplo, entre 6 y 8) según el contexto del sistema descrito.
 
-IMPORTANTE: Responde SOLO con JSON válido en el formato exacto indicado abajo. No incluyas explicaciones, markdown ni texto adicional.
+Ejemplo de entrada válida:
+- "Crea un diagrama de ventas"
+- "Agrega la clase Producto con atributos nombre, precio y stock"
+- "Sistema de biblioteca con clases Libro, Autor y Usuario"
 
-Formato JSON esperado:
+No requieres formato especial, solo entiende la intención y genera el diagrama en JSON.
+
+Formato de respuesta:
 {
   "entities": [
     {
       "id": "unique_id",
-      "name": "ClassName",
+      "name": "NombreClase",
       "type": "class",
-      "position": {"x": number, "y": number},
+      "position": {"x": 100, "y": 100},
       "attributes": [
-        {
-          "name": "attributeName",
-          "type": "String|int|boolean|etc",
-          "visibility": "public|private|protected|package"
-        }
-      ],
-      "methods": [
-        {
-          "name": "methodName",
-          "returnType": "void|String|int|etc",
-          "parameters": [{"name": "paramName", "type": "paramType"}],
-          "visibility": "public|private|protected|package"
-        }
+        {"name": "nombre", "type": "String", "visibility": "public"},
+        {"name": "precio", "type": "Double", "visibility": "private"}
       ]
     }
   ],
   "relations": [
-    {
-      "id": "unique_relation_id",
-      "sourceId": "source_entity_id",
-      "targetId": "target_entity_id",
-      "type": "inheritance|composition|aggregation|association|dependency|implementation",
-      "sourceCardinality": "0..1|1|0..*|1..*|etc",
-      "targetCardinality": "0..1|1|0..*|1..*|etc"
-    }
+    {"id": "rel1", "sourceId": "id1", "targetId": "id2", "type": "association", "sourceCardinality": "1", "targetCardinality": "*"}
   ]
 }
 
-Genera diagramas realistas y coherentes con:
-- Tantas entidades como se necesiten o haya pedido el usuario
-- Jerarquías de herencia donde aplique
-- Relaciones apropiadas entre clases
-- Atributos y métodos realistas por clase
-- Modificadores de visibilidad adecuados
-- Posicionamiento lógico (intenta espaciar las entidades)
+No incluyas explicaciones ni texto adicional, solo el JSON.`;
 
-Tipos disponibles: String, int, boolean, double, float, long, char, Date, List<T>, Set<T>, Map<K,V>
-Visibilidades disponibles: public, private, protected, package
-Tipos de entidad disponibles: class (ÚNICAMENTE)
-Tipos de relación disponibles: inheritance, composition, aggregation, association, dependency, implementation`
-            },
-            {
-              role: "user",
-              content: prompt
-            }
+      const response = await fetch(GROQ_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt }
           ],
-          model: "gpt-3.5-turbo",
+          model: "llama-3.1-8b-instant", // Modelo actualizado de Groq
           temperature: 0.7,
           max_tokens: 4000,
           top_p: 1,
           stream: false
         })
       });
+      
+      // OpenAI fetch (comentado)
+      // const response = await fetch(OPENAI_API_URL, {
+      //   method: 'POST',
+      //   headers: {
+      //     'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({
+      //     messages: [
+      //       { role: "system", content: systemPrompt },
+      //       { role: "user", content: prompt }
+      //     ],
+      //     model: "gpt-3.5-turbo",
+      //     temperature: 0.7,
+      //     max_tokens: 4000,
+      //     top_p: 1,
+      //     stream: false
+      //   })
+      // });
 
       if (!response.ok) {
-  throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+        console.error('❌ [AI Service] OpenAI API error:', response.status, response.statusText);
+        throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('📦 [AI Service] Respuesta de OpenAI:', data);
+      
       const content = data.choices[0]?.message?.content;
 
       if (!content) {
-  throw new Error('No content received from OpenAI API');
+        console.error('❌ [AI Service] No content received from OpenAI API');
+        throw new Error('No content received from OpenAI API');
       }
 
-      console.log('AI Response:', content);
+      console.log('🤖 [AI Service] Contenido de IA:', content);
 
       // Parse the JSON response
       const parsedResponse = this.parseAIResponse(content);
+      console.log('📊 [AI Service] Respuesta parseada:', parsedResponse);
       
       if (!parsedResponse) {
-  throw new Error('Failed to parse OpenAI response as valid JSON');
+        console.error('❌ [AI Service] Failed to parse OpenAI response as valid JSON');
+        throw new Error('Failed to parse OpenAI response as valid JSON');
       }
 
       // Convert to UML diagram format
       const diagram = this.convertToUMLDiagram(parsedResponse);
+      console.log('✅ [AI Service] Diagrama convertido:', diagram);
 
       return {
         success: true,
@@ -201,10 +216,10 @@ Tipos de relación disponibles: inheritance, composition, aggregation, associati
       };
 
     } catch (error) {
-  console.error('Error generating diagram:', error);
+      console.error('❌ [AI Service] Error generating diagram:', error);
       return {
         success: false,
-  error: error instanceof Error ? error.message : 'Unknown error occurred'
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
   }
@@ -263,23 +278,42 @@ Para comandos DELETE: eliminar entidades/relaciones
 
 Mantén las modificaciones mínimas y enfocadas solo a lo que pidió el usuario.`;
 
-  const response = await fetch(OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: request.command }
-          ],
-          model: "gpt-3.5-turbo",
-          temperature: 0.3,
-          max_tokens: 1500,
-          stream: false
-        })
-      });
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: request.command }
+        ],
+        model: "llama-3.1-8b-instant",
+        temperature: 0.3,
+        max_tokens: 1500,
+        stream: false
+      })
+    });
+    
+    // OpenAI fetch (comentado)
+    // const response = await fetch(OPENAI_API_URL, {
+    //   method: 'POST',
+    //   headers: {
+    //     'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    //     'Content-Type': 'application/json',
+    //   },
+    //   body: JSON.stringify({
+    //     messages: [
+    //       { role: "system", content: systemPrompt },
+    //       { role: "user", content: request.command }
+    //     ],
+    //     model: "gpt-3.5-turbo",
+    //     temperature: 0.3,
+    //     max_tokens: 1500,
+    //     stream: false
+    //   })
+    // });
 
       if (!response.ok) {
   throw new Error(`OpenAI API error: ${response.status}`);
@@ -615,10 +649,10 @@ Sé útil, conciso y técnicamente preciso. Si el usuario te pide generar un nue
 - Relations: ${context.relations.length}`;
       }
 
-  const response = await fetch(OPENAI_API_URL, {
+  const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -632,7 +666,7 @@ Sé útil, conciso y técnicamente preciso. Si el usuario te pide generar un nue
               content: message
             }
           ],
-          model: "gpt-3.5-turbo",
+          model: "llama-3.1-8b-instant",
           temperature: 0.7,
           max_tokens: 1000,
           top_p: 1,
@@ -674,10 +708,10 @@ Entities: ${diagram.entities.map(e => `${e.name} (${e.type})`).join(', ')}
 Relations: ${diagram.relations.map(r => `${r.source} -> ${r.target} (${r.type})`).join(', ')}
       `;
 
-  const response = await fetch(OPENAI_API_URL, {
+  const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -701,7 +735,7 @@ Formato de respuesta de ejemplo:
               content: `Please analyze this UML diagram and suggest improvements: ${diagramSummary}`
             }
           ],
-          model: "gpt-3.5-turbo",
+          model: "llama-3.1-8b-instant",
           temperature: 0.7,
           max_tokens: 1000,
           top_p: 1,
@@ -741,10 +775,10 @@ Formato de respuesta de ejemplo:
       const systemPrompt = this.createVoiceSystemPrompt(request.currentDiagram);
       const userPrompt = this.createVoiceUserPrompt(request);
 
-  const response = await fetch(OPENAI_API_URL, {
+  const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -752,7 +786,7 @@ Formato de respuesta de ejemplo:
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
-          model: "gpt-3.5-turbo",
+          model: "llama-3.1-8b-instant",
           temperature: 0.3,
           max_tokens: 2000,
           stream: false

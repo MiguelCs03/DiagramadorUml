@@ -4,8 +4,10 @@ import React, { useState, useCallback, useEffect } from 'react';
 import DiagramEditor from './DiagramEditor';
 import Sidebar from './Sidebar';
 import AIChatBot from './AIChatBot';
-import { VoiceChat } from './VoiceChat';
 import { CollaborationPanel } from './CollaborationPanel';
+import HelpButton from './HelpButton';
+import { SaveProjectModal } from './SaveProjectModal';
+import { Notification } from './Notification';
 import { useWebSocket } from '../hooks/useWebSocket';
 import type {
   UMLDiagram, 
@@ -16,6 +18,7 @@ import type {
 } from '../types/uml';
 import { CardinalityUtils } from '../types/uml';
 import { exportAsZip, exportDiagramAsJson } from '../utils/projectExporter';
+import { projectService } from '../services/projectService';
 
 // Componente principal que maneja el estado del diagrama
 const UMLDiagramApp: React.FC = () => {
@@ -40,7 +43,26 @@ const UMLDiagramApp: React.FC = () => {
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
 
   // Estado para controlar el panel lateral activo
-  const [activePanel, setActivePanel] = useState<'ai' | 'voice' | 'collab' | null>('ai');
+  const [activePanel, setActivePanel] = useState<'ai' | 'collab' | null>('ai');
+
+  // Estado para el modal de guardar proyecto
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  // Estado para notificaciones
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'success' | 'error' | 'info';
+  } | null>(null);
+
+  // Estado para trackear el proyecto actual (si estamos editando uno existente)
+  const [currentProject, setCurrentProject] = useState<{
+    id: number;
+    nombre: string;
+    descripcion?: string;
+  } | null>(null);
+
+  // Estado para mostrar si se está auto-guardando
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
 
   // Hook de WebSocket para colaboración
   const {
@@ -56,6 +78,61 @@ const UMLDiagramApp: React.FC = () => {
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // useEffect para cargar proyecto desde localStorage (cuando se viene del dashboard)
+  useEffect(() => {
+    if (isClient) {
+      const savedProject = localStorage.getItem('currentProject');
+      if (savedProject) {
+        try {
+          const project = JSON.parse(savedProject);
+          console.log('Proyecto desde localStorage:', project);
+          
+          // Establecer el proyecto actual para auto-guardado
+          setCurrentProject({
+            id: project.id,
+            nombre: project.nombre,
+            descripcion: project.descripcion
+          });
+          
+          if (project.contenido_diagrama && Object.keys(project.contenido_diagrama).length > 0) {
+            // Si tiene contenido de diagrama, cargarlo
+            console.log('Contenido del diagrama:', project.contenido_diagrama);
+            
+            setDiagram({
+              ...project.contenido_diagrama,
+              id: project.contenido_diagrama.id || `diagram-${Date.now()}`,
+              name: project.nombre,
+              metadata: {
+                ...project.contenido_diagrama.metadata,
+                created: new Date(project.createdAt),
+                modified: new Date(project.updatedAt)
+              }
+            });
+            console.log('Proyecto cargado desde dashboard:', project.nombre);
+          } else {
+            // Si no tiene contenido, crear un diagrama vacío con el nombre del proyecto
+            console.log('Proyecto sin contenido, creando diagrama vacío');
+            setDiagram({
+              id: `diagram-${Date.now()}`,
+              name: project.nombre,
+              entities: [],
+              relations: [],
+              metadata: {
+                created: new Date(project.createdAt),
+                modified: new Date(project.updatedAt),
+                version: '1.0.0'
+              }
+            });
+          }
+          // Limpiar el localStorage después de cargar
+          localStorage.removeItem('currentProject');
+        } catch (error) {
+          console.error('Error al cargar proyecto desde localStorage:', error);
+        }
+      }
+    }
+  }, [isClient]);
 
   // Configurar callback para recibir actualizaciones de colaboración
   useEffect(() => {
@@ -73,6 +150,31 @@ const UMLDiagramApp: React.FC = () => {
       });
     });
   }, [onDiagramUpdate]);
+
+  // Auto-guardado cuando el diagrama cambia (solo si estamos editando un proyecto existente)
+  useEffect(() => {
+    if (currentProject && isClient) {
+      // Debounce el auto-guardado para evitar demasiadas llamadas
+      const timeoutId = setTimeout(async () => {
+        try {
+          setIsAutoSaving(true);
+          console.log('Auto-guardando proyecto:', currentProject.nombre);
+          await projectService.update(currentProject.id, {
+            nombre: currentProject.nombre,
+            descripcion: currentProject.descripcion,
+            contenido_diagrama: diagram
+          });
+          console.log('Proyecto auto-guardado exitosamente');
+        } catch (error) {
+          console.error('Error en auto-guardado:', error);
+        } finally {
+          setIsAutoSaving(false);
+        }
+      }, 2000); // Auto-guardar después de 2 segundos de inactividad
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [diagram, currentProject, isClient]);
 
   // Manejar actualización del diagrama
   const handleUpdateDiagram = useCallback((updatedDiagram: UMLDiagram) => {
@@ -208,6 +310,36 @@ const UMLDiagramApp: React.FC = () => {
     }
   }, [diagram]);
 
+  // Manejar guardado de proyecto
+  const handleSaveProject = useCallback(() => {
+    // Si ya tenemos un proyecto, este botón funciona como "Guardar como..."
+    // Limpiar currentProject temporalmente para forzar crear nuevo
+    if (currentProject) {
+      setCurrentProject(null);
+    }
+    setShowSaveModal(true);
+  }, [currentProject]);
+
+  // Manejar éxito del guardado
+  const handleSaveSuccess = useCallback((project: any) => {
+    // Establecer el proyecto actual para futuras actualizaciones automáticas
+    setCurrentProject({
+      id: project.id,
+      nombre: project.nombre,
+      descripcion: project.descripcion
+    });
+    
+    setNotification({
+      message: `Proyecto "${project.nombre}" guardado exitosamente`,
+      type: 'success'
+    });
+  }, []);
+
+  // Cerrar notificación
+  const handleCloseNotification = useCallback(() => {
+    setNotification(null);
+  }, []);
+
   // Importar diagrama
   const handleImportDiagram = useCallback(() => {
     const input = document.createElement('input');
@@ -243,6 +375,13 @@ const UMLDiagramApp: React.FC = () => {
     setSelectedTool(null);
   }, []);
 
+  // Abrir chatbot desde botón de ayuda
+  const handleOpenHelp = useCallback(() => {
+    console.log('handleOpenHelp called, current activePanel:', activePanel);
+    setActivePanel('ai');
+    console.log('Setting activePanel to ai');
+  }, [activePanel]);
+
   // Si no estamos en el cliente, no renderizamos nada para evitar problemas de hidratación
   if (!isClient) {
     return null;
@@ -250,6 +389,26 @@ const UMLDiagramApp: React.FC = () => {
 
   return (
     <div className="h-screen flex bg-gray-100">
+      {/* Indicador de estado del proyecto */}
+      {currentProject && (
+        <div className="absolute top-4 left-4 z-50 bg-white rounded-lg shadow-lg px-4 py-2 border">
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-sm font-medium text-gray-700">
+                {currentProject.nombre}
+              </span>
+            </div>
+            {isAutoSaving && (
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-xs text-blue-600">Guardando...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Sidebar izquierda */}
       <Sidebar
         selectedTool={selectedTool}
@@ -270,8 +429,14 @@ const UMLDiagramApp: React.FC = () => {
           selectedTool={selectedTool}
           onClearTool={handleClearTool}
         />
-        {/* Botón principal para exportar backend Spring Boot */}
-        <div className="p-4 flex justify-center border-t bg-gray-50">
+        {/* Botones principales */}
+        <div className="p-4 flex justify-center gap-4 border-t bg-gray-50">
+          <button
+            onClick={handleSaveProject}
+            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg shadow-lg font-semibold text-lg hover:from-green-700 hover:to-emerald-700 transition-all"
+          >
+            💾 {currentProject ? 'Guardar como...' : 'Guardar Proyecto'}
+          </button>
           <button
             onClick={handleExportSpringBoot}
             className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg shadow-lg font-semibold text-lg hover:from-purple-700 hover:to-blue-700 transition-all"
@@ -293,17 +458,7 @@ const UMLDiagramApp: React.FC = () => {
                 : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
             }`}
           >
-            💬 IA
-          </button>
-          <button
-            onClick={() => setActivePanel(activePanel === 'voice' ? null : 'voice')}
-            className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-              activePanel === 'voice' 
-                ? 'bg-green-500 text-white' 
-                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            🎤 Voz
+            💬 IA/Voz
           </button>
           <button
             onClick={() => setActivePanel(activePanel === 'collab' ? null : 'collab')}
@@ -328,12 +483,7 @@ const UMLDiagramApp: React.FC = () => {
             <AIChatBot
               onDiagramGenerated={handleAIGeneratedDiagram}
               currentDiagram={diagram}
-            />
-          )}
-          {activePanel === 'voice' && (
-            <VoiceChat
-              currentDiagram={diagram}
-              onDiagramUpdate={handleAIGeneratedDiagram}
+              isEmbedded={true}
             />
           )}
           {activePanel === 'collab' && (
@@ -355,6 +505,27 @@ const UMLDiagramApp: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Botón de ayuda flotante */}
+      <HelpButton />
+
+      {/* Modal para guardar proyecto */}
+      <SaveProjectModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        diagramData={diagram}
+        onSaveSuccess={handleSaveSuccess}
+        currentProject={currentProject}
+      />
+
+      {/* Notificaciones */}
+      {notification && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={handleCloseNotification}
+        />
+      )}
     </div>
   );
 }

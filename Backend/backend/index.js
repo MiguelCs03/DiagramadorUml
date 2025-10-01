@@ -6,20 +6,37 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Ejemplo de configuración de Sequelize (puedes cambiar por otro ORM si lo prefieres)
-const { Sequelize } = require('sequelize');
-const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASS, {
-	host: process.env.DB_HOST || 'localhost',
-	dialect: 'postgres', // Usando PostgreSQL
-});
+// Importar modelos y base de datos
+const { sequelize } = require('./models');
 
-// Probar conexión ORM
+// Importar rutas
+const authRoutes = require('./routes/auth');
+const projectRoutes = require('./routes/projects');
+
+// Usar rutas
+app.use('/api/auth', authRoutes);
+app.use('/api/projects', projectRoutes);
+
+// Probar conexión y sincronizar modelos
 sequelize.authenticate()
-	.then(() => console.log('Conexión a la base de datos exitosa'))
-	.catch(err => console.error('Error de conexión:', err));
+	.then(() => {
+		console.log('Conexión a la base de datos exitosa');
+		// Sincronizar modelos con la base de datos
+		return sequelize.sync({ alter: true }); // alter: true actualiza las tablas sin borrar datos
+	})
+	.then(() => {
+		console.log('Modelos sincronizados con la base de datos');
+	})
+	.catch(err => console.error('Error de conexión o sincronización:', err));
 
 app.get('/', (req, res) => {
-	res.send('Backend funcionando');
+	res.send('Backend del Diagramador UML funcionando');
+});
+
+// Manejo de errores global
+app.use((err, req, res, next) => {
+	console.error(err.stack);
+	res.status(500).json({ error: 'Algo salió mal!' });
 });
 
 const PORT = process.env.PORT || 3001;

@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { AIService, type DiagramGenerationRequest, type DiagramGenerationResponse, type DiagramModificationRequest, type DiagramModificationResponse } from '../services/aiService';
+import { getHelpResponse } from '../services/helpContent';
+import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import type { UMLDiagram } from '../types/uml';
 
 interface ChatMessage {
@@ -13,23 +15,50 @@ interface AIChatBotProps {
   onDiagramGenerated: (diagram: UMLDiagram) => void;
   currentDiagram?: UMLDiagram;
   className?: string;
+  isEmbedded?: boolean; // Si está embebido en panel lateral, siempre expandido
 }
 
-const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagram, className = '' }) => {
+const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagram, className = '', isEmbedded = false }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      id: '1',
+      id: 'welcome-message',
       type: 'system',
-      content: '¡Hola! 👋 Soy tu asistente de IA para diagramas UML.\n\n📋 **Puedo ayudarte con:**\n• Crear diagramas completos (ej: "Sistema de biblioteca con 8 clases")\n• Modificar diagramas existentes (ej: "Añade la clase Autor")\n• Sugerir mejoras\n\n💡 **Tip:** Sé específico sobre cuántas clases necesitas para diagramas completos.',
+      content: '¡Hola! 👋 Soy tu asistente de IA para diagramas UML.\n\n📋 **Puedo ayudarte con:**\n• Crear diagramas completos (ej: "Sistema de ventas")\n• Modificar diagramas existentes (ej: "Agrega la clase Producto")\n• Sugerir mejoras\n• Responder preguntas sobre cómo usar la aplicación\n\n💡 **Tips:**\n• Escribe "manual" o "guía" para ver el manual de usuario\n• Si no indicas el número de clases, yo elegiré una cantidad adecuada automáticamente.\n• Usa el micrófono 🎤 para hablar en lugar de escribir',
       timestamp: new Date()
     }
   ]);
   
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(isEmbedded); // Si está embebido, siempre expandido
+  const [isClient, setIsClient] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Verificar que estemos en el cliente
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Voice recognition setup
+  const handleVoiceResult = useCallback((transcript: string) => {
+    setInputValue(transcript);
+  }, []);
+
+  const {
+    isListening,
+    isSupported,
+    startListening,
+    stopListening,
+    transcript,
+    error: voiceError
+  } = useVoiceRecognition({
+    onResult: handleVoiceResult,
+    onError: (error) => {
+      console.error('Voice error:', error);
+      addMessage('ai', `⚠️ Error de voz: ${error}`);
+    }
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -41,13 +70,89 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
 
   const addMessage = useCallback((type: 'user' | 'ai' | 'system', content: string) => {
     const newMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}-${Math.random()}`,
       type,
       content,
       timestamp: new Date()
     };
     setMessages(prev => [...prev, newMessage]);
   }, []);
+
+  // Handle voice commands similar to VoiceChat
+  const handleVoiceCommand = useCallback(async (command: string) => {
+    if (!command.trim()) return;
+
+    addMessage('user', `🎤 ${command}`);
+    setIsLoading(true);
+
+    try {
+      // 1) Intentar responder con ayuda local (manual) antes de llamar a la IA
+      const localHelp = getHelpResponse(command);
+      if (localHelp) {
+        addMessage('ai', localHelp);
+        setIsLoading(false);
+        return;
+      }
+
+      // Process voice command like text input
+      const intent = AIService.detectUserIntent(command, !!currentDiagram);
+      
+      if (intent === 'modify' && currentDiagram) {
+        const request: DiagramModificationRequest = {
+          command: command,
+          currentDiagram: currentDiagram
+        };
+
+        const response: DiagramModificationResponse = await AIService.modifyDiagram(request);
+
+        if (response.success && response.updatedDiagram) {
+          addMessage('ai', `✅ ${response.message}`);
+          onDiagramGenerated(response.updatedDiagram);
+        } else {
+          addMessage('ai', `❌ Error: ${response.error || 'No se pudo modificar el diagrama. Intenta usar frases simples en español, por ejemplo: "Agrega la clase Producto con nombre y precio".'}`);
+        }
+      } else if (intent === 'create') {
+        const request: DiagramGenerationRequest = {
+          description: command,
+          businessContext: currentDiagram ? `Reemplazando diagrama actual: ${currentDiagram.name}` : undefined
+        };
+
+        const response: DiagramGenerationResponse = await AIService.generateDiagram(request);
+
+        if (response.success && response.diagram) {
+          addMessage('ai', response.explanation || '✅ ¡Diagrama generado exitosamente!');
+          onDiagramGenerated(response.diagram);
+        } else {
+          addMessage('ai', `❌ Error: ${response.error || 'No se pudo generar el diagrama. Escribe por ejemplo: "Sistema de ventas con 5 clases" o "Crea un diagrama de inventario".'}`);
+        }
+      } else {
+        const response = await AIService.sendMessage(command, currentDiagram);
+        
+        if (response.success && response.response) {
+          addMessage('ai', response.response);
+        } else {
+          addMessage('ai', `❌ Error: ${response.error || 'No se pudo procesar el mensaje. Intenta usar frases simples en español.'}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing voice command:', error);
+      addMessage('ai', '❌ Error al procesar el comando de voz. Por favor, inténtalo de nuevo.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addMessage, onDiagramGenerated, currentDiagram]);
+
+  // Handle voice button click
+  const handleVoiceToggle = useCallback(() => {
+    if (isListening) {
+      stopListening();
+      if (transcript) {
+        handleVoiceCommand(transcript);
+      }
+    } else {
+      startListening();
+    }
+  }, [isListening, stopListening, startListening, transcript, handleVoiceCommand]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +165,14 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
     setIsLoading(true);
 
     try {
+      // 1) Intentar responder con ayuda local (manual) antes de llamar a la IA
+      const localHelp = getHelpResponse(userMessage);
+      if (localHelp) {
+        addMessage('ai', localHelp);
+        setIsLoading(false);
+        return;
+      }
+
       // Detectar la intención del usuario (KISS principle)
       const intent = AIService.detectUserIntent(userMessage, !!currentDiagram);
       
@@ -104,8 +217,8 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
         }
       }
     } catch (error) {
-      console.error('Error in chat:', error);
-      addMessage('ai', '❌ Error al comunicarse con la IA. Por favor, inténtalo de nuevo.');
+  console.error('Error in chat:', error);
+  addMessage('ai', '❌ Error al comunicarse con la IA. Por favor, inténtalo de nuevo usando frases simples en español.');
     } finally {
       setIsLoading(false);
     }
@@ -132,19 +245,19 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
   }, [currentDiagram, isLoading, addMessage]);
 
   const examplePrompts = [
-    "Sistema de gestión de biblioteca con 8 clases",
-    "E-commerce completo con 10 entidades principales", 
-    "Sistema bancario con 6 clases: Cliente, Cuenta, Transacción, etc",
-    "Red social básica con 5 clases principales",
-    "Sistema de recursos humanos con 7 entidades"
+  "Sistema de ventas con 5 clases: Producto, Cliente, Factura, Vendedor, DetalleFactura",
+  "Crea un diagrama de inventario con clases en español",
+  "Sistema escolar con clases Alumno, Profesor, Curso, Nota, Materia",
+  "Red social con Usuario, Publicación, Comentario, Mensaje, Grupo",
+  "Sistema de biblioteca con Libro, Autor, Usuario"
   ];
 
   const modificationExamples = [
-    "Añade la clase Autor con atributos nombre y biografía",
-    "Agrega un método calcularDescuento a la clase Producto",
-    "Crea una relación entre Usuario y Pedido",
-    "Elimina la clase Temporal",
-    "Modifica la clase Cliente para incluir email"
+  "Agrega la clase Producto con atributos nombre, precio y stock",
+  "Añade el atributo dirección a la clase Cliente",
+  "Crea una relación entre Factura y Cliente",
+  "Elimina la clase Temporal",
+  "Modifica la clase Vendedor para incluir teléfono"
   ];
 
   const handleExampleClick = useCallback((example: string) => {
@@ -152,7 +265,7 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
     inputRef.current?.focus();
   }, []);
 
-  if (!isExpanded) {
+  if (!isExpanded && !isEmbedded) {
     return (
       <div className={`fixed bottom-4 right-4 z-50 ${className}`}>
         <button
@@ -169,21 +282,28 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
   }
 
   return (
-    <div className={`fixed bottom-4 right-4 w-96 h-[600px] bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col z-50 ${className}`}>
+    <div className={`${isEmbedded ? 'h-full bg-white flex flex-col' : 'fixed bottom-4 right-4 w-96 h-[600px] bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col z-50'} ${className}`}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
+      <div className={`bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 ${!isEmbedded ? 'rounded-t-lg' : ''} flex justify-between items-center`}>
         <div className="flex items-center space-x-2">
-          <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-          <h3 className="font-semibold">Asistente IA UML</h3>
+          <div className={`w-3 h-3 rounded-full ${isListening ? 'bg-red-400 animate-pulse' : 'bg-green-400 animate-pulse'}`}></div>
+          <h3 className="font-semibold">
+            {isListening ? 'Escuchando...' : 'Asistente IA UML'}
+            {!isSupported && isClient && (
+              <span className="text-xs ml-2 opacity-75">(Voz no disponible)</span>
+            )}
+          </h3>
         </div>
-        <button
-          onClick={() => setIsExpanded(false)}
-          className="text-white hover:text-gray-200 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        {!isEmbedded && (
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="text-white hover:text-gray-200 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Messages */}
@@ -263,10 +383,11 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
       {/* Input */}
       <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200">
         {/* Intent indicator */}
-        {inputValue.trim() && (
+        {(inputValue.trim() || (isListening && transcript)) && (
           <div className="mb-2 text-xs text-gray-600">
             {(() => {
-              const intent = AIService.detectUserIntent(inputValue, !!currentDiagram);
+              const text = isListening && transcript ? transcript : inputValue;
+              const intent = AIService.detectUserIntent(text, !!currentDiagram);
               const icons = {
                 create: '🔄 Crear nuevo diagrama',
                 modify: '✏️ Modificar diagrama actual',
@@ -274,6 +395,9 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
               };
               return icons[intent];
             })()}
+            {isListening && (
+              <span className="ml-2 text-blue-600 font-medium">🎤 Transcribiendo...</span>
+            )}
           </div>
         )}
         
@@ -281,12 +405,39 @@ const AIChatBot: React.FC<AIChatBotProps> = ({ onDiagramGenerated, currentDiagra
           <input
             ref={inputRef}
             type="text"
-            value={inputValue}
+            value={isListening ? transcript : inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder={currentDiagram ? "Modifica el diagrama o crea uno nuevo..." : "Describe el negocio o sistema..."}
+            placeholder={isListening ? "Escuchando..." : (currentDiagram ? "Modifica el diagrama o crea uno nuevo..." : "Describe el negocio o sistema...")}
             className="flex-1 text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
+            disabled={isLoading || isListening}
           />
+          
+          {/* Voice Recognition Button */}
+          {isClient && isSupported && (
+            <button
+              type="button"
+              onClick={handleVoiceToggle}
+              disabled={isLoading}
+              className={`p-2 rounded-md transition-colors ${
+                isListening 
+                  ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse' 
+                  : 'bg-green-600 hover:bg-green-700 text-white'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={isListening ? "Detener grabación" : "Hablar"}
+            >
+              {isListening ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              )}
+            </button>
+          )}
+          
           <button
             type="submit"
             disabled={!inputValue.trim() || isLoading}
