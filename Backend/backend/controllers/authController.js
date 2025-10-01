@@ -6,23 +6,29 @@ const authController = {
   // Registro de usuario
   register: async (req, res) => {
     try {
+      console.log('🔍 [Register] Request body:', req.body);
       const { nombre, email, password } = req.body;
 
       // Validar que se proporcionen todos los campos
       if (!nombre || !email || !password) {
+        console.log('❌ [Register] Missing fields');
         return res.status(400).json({ error: 'Todos los campos son requeridos' });
       }
 
+      console.log('🔍 [Register] Checking if user exists:', email);
       // Verificar si el usuario ya existe
       const existingUser = await User.findOne({ where: { email } });
       if (existingUser) {
+        console.log('❌ [Register] User already exists');
         return res.status(400).json({ error: 'El usuario ya existe con este email' });
       }
 
+      console.log('🔍 [Register] Hashing password...');
       // Hash de la contraseña
       const saltRounds = 10;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+      console.log('🔍 [Register] Creating user in database...');
       // Crear usuario
       const newUser = await User.create({
         nombre,
@@ -30,6 +36,15 @@ const authController = {
         password: hashedPassword
       });
 
+      console.log('✅ [Register] User created successfully:', newUser.id);
+
+      // Verificar JWT_SECRET
+      if (!process.env.JWT_SECRET) {
+        console.error('❌ [Register] JWT_SECRET not configured');
+        return res.status(500).json({ error: 'Configuración del servidor incompleta' });
+      }
+
+      console.log('🔍 [Register] Generating JWT token...');
       // Generar token JWT
       const token = jwt.sign(
         { userId: newUser.id, email: newUser.email },
@@ -37,6 +52,7 @@ const authController = {
         { expiresIn: '24h' }
       );
 
+      console.log('✅ [Register] Registration successful');
       res.status(201).json({
         message: 'Usuario registrado exitosamente',
         token,
@@ -48,8 +64,12 @@ const authController = {
       });
 
     } catch (error) {
-      console.error('Error en registro:', error);
-      res.status(500).json({ error: 'Error interno del servidor' });
+      console.error('❌ [Register] Error completo:', error);
+      console.error('❌ [Register] Error stack:', error.stack);
+      res.status(500).json({ 
+        error: 'Error interno del servidor',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 
