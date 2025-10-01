@@ -1,7 +1,7 @@
 import { authService } from './authService';
 import { Project } from '../types/auth';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'https://diagramadoruml.onrender.com/api';
 
 export const projectService = {
   // Crear nuevo proyecto

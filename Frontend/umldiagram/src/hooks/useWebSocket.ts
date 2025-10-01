@@ -31,13 +31,10 @@ interface UseWebSocketReturn {
   onClientLeft: (callback: (clientCount: number) => void) => void;
 }
 
-// Detectar automáticamente la URL correcta (KISS)
-const WS_HOST = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+// Detectar automáticamente la URL correcta (KISS) o usar env
+const WS_URL = 'wss://diagramadoruml.onrender.com/ws';
 
-// KISS: Usar WS sin SSL para evitar problemas de certificados
-const WS_URL = `ws://${WS_HOST}:8081`;
-
-console.log('🔍 [WebSocket Debug] Host detectado:', WS_HOST);
+console.log('🔍 [WebSocket Debug] URL a usar:', WS_URL);
 console.log('🔍 [WebSocket Debug] URL a usar:', WS_URL);
 console.log('🔍 [WebSocket Debug] Location:', typeof window !== 'undefined' ? window.location.href : 'SSR');
 

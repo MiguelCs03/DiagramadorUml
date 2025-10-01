@@ -1,5 +1,5 @@
-// Configuración de la API
-const API_BASE_URL = 'http://localhost:3001/api';
+// Configuración de la API (fijada a producción por solicitud)
+const API_BASE_URL = 'https://diagramadoruml.onrender.com/api';
 
 // Servicio de autenticación
 export const authService = {

@@ -3,12 +3,26 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 
-// Configuración de CORS para producción
+// Configuración de CORS para producción con orígenes configurables
+const parseOrigins = (value) =>
+	value
+		? value.split(',').map((s) => s.trim()).filter(Boolean)
+		: [];
+
+const allowedOrigins = process.env.NODE_ENV === 'production'
+	? parseOrigins(process.env.FRONTEND_ORIGINS) || ['https://diagramor.netlify.app']
+	: ['*'];
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://tu-frontend-url.vercel.app', 'https://tu-dominio.com'] // Actualiza con tu URL de frontend
-    : '*', // En desarrollo permite todos los orígenes
-  credentials: true
+	origin: function (origin, callback) {
+		// Permitir requests sin origin (e.g., curl, health checks)
+		if (!origin) return callback(null, true);
+		if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+			return callback(null, true);
+		}
+		return callback(new Error(`Not allowed by CORS: ${origin}`));
+	},
+	credentials: true,
 };
 
 app.use(cors(corsOptions));
@@ -73,7 +87,132 @@ app.use((err, req, res, next) => {
 	res.status(500).json({ error: 'Algo salió mal!' });
 });
 
+const http = require('http');
+const WebSocket = require('ws');
+
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+const server = http.createServer(app);
+
+// --- WebSocket integrado: wss://<host>/ws ---
+const rooms = new Map(); // roomCode -> { id, code, clients: Set<WebSocket>, diagram, createdAt }
+
+const wss = new WebSocket.Server({ server, path: '/ws' });
+console.log('🧩 WebSocket integrado habilitado en path /ws');
+
+function getDefaultDiagram() {
+	return {
+		id: 'default-diagram',
+		name: 'Collaborative Diagram',
+		entities: [],
+		relations: [],
+		metadata: { created: new Date(), modified: new Date(), version: '1.0.0' }
+	};
+}
+
+function wsSend(ws, message) {
+	if (ws.readyState === WebSocket.OPEN) {
+		ws.send(JSON.stringify(message));
+	}
+}
+
+function broadcastToRoom(roomCode, message, exclude) {
+	const room = rooms.get(roomCode);
+	if (!room) return;
+	room.clients.forEach((client) => {
+		if (client !== exclude && client.readyState === WebSocket.OPEN) {
+			wsSend(client, message);
+		}
+	});
+}
+
+function handleMessage(ws, data) {
+	const { type, payload } = data || {};
+	switch (type) {
+		case 'CREATE_ROOM': {
+			const roomCode = Math.random().toString(36).substr(2, 6).toUpperCase();
+			const room = {
+				id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+				code: roomCode,
+				clients: new Set([ws]),
+				diagram: (payload && payload.diagram) || getDefaultDiagram(),
+				createdAt: new Date(),
+			};
+			rooms.set(roomCode, room);
+			ws.roomCode = roomCode;
+			wsSend(ws, { type: 'ROOM_CREATED', payload: { roomCode, diagram: room.diagram, clientCount: room.clients.size } });
+			break;
+		}
+		case 'JOIN_ROOM': {
+			const roomCode = (payload && payload.roomCode || '').toUpperCase();
+			const room = rooms.get(roomCode);
+			if (!room) {
+				wsSend(ws, { type: 'ERROR', payload: { message: 'Room not found' } });
+				return;
+			}
+			if (ws.roomCode && ws.roomCode !== roomCode) {
+				// leave previous
+				const prev = rooms.get(ws.roomCode);
+				if (prev) {
+					prev.clients.delete(ws);
+					broadcastToRoom(ws.roomCode, { type: 'CLIENT_LEFT', payload: { clientCount: prev.clients.size } });
+				}
+			}
+			room.clients.add(ws);
+			ws.roomCode = roomCode;
+			wsSend(ws, { type: 'ROOM_JOINED', payload: { roomCode, diagram: room.diagram, clientCount: room.clients.size } });
+			broadcastToRoom(roomCode, { type: 'CLIENT_JOINED', payload: { clientCount: room.clients.size } }, ws);
+			break;
+		}
+		case 'LEAVE_ROOM': {
+			const roomCode = (payload && payload.roomCode || ws.roomCode || '').toUpperCase();
+			const room = rooms.get(roomCode);
+			if (!room) return;
+			room.clients.delete(ws);
+			ws.roomCode = null;
+			if (room.clients.size === 0) {
+				rooms.delete(roomCode);
+			} else {
+				broadcastToRoom(roomCode, { type: 'CLIENT_LEFT', payload: { clientCount: room.clients.size } });
+			}
+			break;
+		}
+		case 'UPDATE_DIAGRAM': {
+			const roomCode = (payload && payload.roomCode || ws.roomCode || '').toUpperCase();
+			const diagram = payload && payload.diagram;
+			const room = rooms.get(roomCode);
+			if (!room || !room.clients.has(ws)) {
+				wsSend(ws, { type: 'ERROR', payload: { message: 'Not in room or room not found' } });
+				return;
+			}
+			room.diagram = diagram;
+			broadcastToRoom(roomCode, { type: 'DIAGRAM_UPDATED', payload: { diagram } }, ws);
+			break;
+		}
+		case 'PING':
+			wsSend(ws, { type: 'PONG' });
+			break;
+		default:
+			wsSend(ws, { type: 'ERROR', payload: { message: `Unknown message type: ${type}` } });
+	}
+}
+
+wss.on('connection', (ws) => {
+	ws.on('message', (raw) => {
+		try { handleMessage(ws, JSON.parse(raw)); } catch (e) { wsSend(ws, { type: 'ERROR', payload: { message: 'Invalid message format' } }); }
+	});
+	ws.on('close', () => {
+		if (ws.roomCode) {
+			const room = rooms.get(ws.roomCode);
+			if (room) {
+				room.clients.delete(ws);
+				if (room.clients.size === 0) rooms.delete(ws.roomCode);
+				else broadcastToRoom(ws.roomCode, { type: 'CLIENT_LEFT', payload: { clientCount: room.clients.size } });
+			}
+			ws.roomCode = null;
+		}
+	});
+});
+
+server.listen(PORT, () => {
 	console.log(`Servidor backend escuchando en puerto ${PORT}`);
 });
