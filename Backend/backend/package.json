@@ -10,7 +10,7 @@
     "start": "node index.js",
     "setup-db": "node setup-db.js",
     "build": "echo 'No build step required'",
-    "postinstall": "npm run setup-db"
+    "postinstall": "echo 'Skipping DB setup on install'"
   },
   "keywords": [],
   "author": "",

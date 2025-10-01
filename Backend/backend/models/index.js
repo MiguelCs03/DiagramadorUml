@@ -3,8 +3,21 @@ const { Sequelize } = require('sequelize');
 // Configuración de la conexión a la base de datos
 let sequelize;
 
-if (process.env.DATABASE_URL) {
-  // En producción con Render, usar DATABASE_URL
+// Priorizar conexión interna en Render si está disponible
+if (process.env.INTERNAL_DATABASE_URL) {
+  sequelize = new Sequelize(process.env.INTERNAL_DATABASE_URL, {
+    dialect: 'postgres',
+    // Conexión interna no usa SSL
+    logging: process.env.NODE_ENV === 'production' ? false : console.log,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
+  });
+} else if (process.env.DATABASE_URL) {
+  // Conexión externa (TLS requerido)
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
     dialectOptions: {
