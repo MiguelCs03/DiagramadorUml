@@ -9,19 +9,9 @@ const parseOrigins = (value) =>
 		? value.split(',').map((s) => s.trim()).filter(Boolean)
 		: [];
 
-const allowedOrigins = process.env.NODE_ENV === 'production'
-	? parseOrigins(process.env.FRONTEND_ORIGINS) || ['https://diagramor.netlify.app']
-	: ['*'];
-
+// CORS permisivo - permite cualquier origen
 const corsOptions = {
-	origin: function (origin, callback) {
-		// Permitir requests sin origin (e.g., curl, health checks)
-		if (!origin) return callback(null, true);
-		if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-			return callback(null, true);
-		}
-		return callback(new Error(`Not allowed by CORS: ${origin}`));
-	},
+	origin: true, // Permite cualquier origen
 	credentials: true,
 };
 
