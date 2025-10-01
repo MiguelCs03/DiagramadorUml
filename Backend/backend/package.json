@@ -8,7 +8,9 @@
     "websocket": "node websocket-server.js",
     "dev": "node index.js & node websocket-server.js",
     "start": "node index.js",
-    "setup-db": "node setup-db.js"
+    "setup-db": "node setup-db.js",
+    "build": "echo 'No build step required'",
+    "postinstall": "npm run setup-db"
   },
   "keywords": [],
   "author": "",

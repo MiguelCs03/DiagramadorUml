@@ -1,11 +1,41 @@
 const { Sequelize } = require('sequelize');
 
 // Configuración de la conexión a la base de datos
-const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASS, {
-  host: process.env.DB_HOST || 'localhost',
-  dialect: 'postgres',
-  logging: console.log, // Para ver las queries SQL en desarrollo
-});
+let sequelize;
+
+if (process.env.DATABASE_URL) {
+  // En producción con Render, usar DATABASE_URL
+  sequelize = new Sequelize(process.env.DATABASE_URL, {
+    dialect: 'postgres',
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
+    },
+    logging: process.env.NODE_ENV === 'production' ? false : console.log,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
+  });
+} else {
+  // En desarrollo local, usar variables individuales
+  sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASS, {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 5432,
+    dialect: 'postgres',
+    logging: console.log,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
+  });
+}
 
 // Importar modelos
 const User = require('./User')(sequelize);

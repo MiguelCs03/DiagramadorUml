@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: uml-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: postgresql://diagramador_uml_user:MGH7RtWWjmBkIltTeomLf7sP8u1rIqyu@dpg-d3eabk2li9vc739fuph0-a/diagramador_uml
+      - key: JWT_SECRET
+        generateValue: true

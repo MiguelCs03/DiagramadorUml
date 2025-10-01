@@ -128,3 +128,47 @@ pnpm start
 Después de ejecutar `pnpm run setup-db`:
 - **Email:** test@example.com
 - **Contraseña:** test123
+
+## 🚀 Despliegue en Render
+
+### Opción 1: Usando render.yaml (Recomendado)
+
+1. Sube este repositorio a GitHub
+2. Conecta tu repositorio en Render.com
+3. Render detectará automáticamente el archivo `render.yaml` y configurará:
+   - El servicio web con Node.js
+   - La base de datos PostgreSQL
+   - Las variables de entorno necesarias
+
+### Opción 2: Configuración manual
+
+1. **Crear servicio web en Render:**
+   - Tipo: Web Service
+   - Runtime: Node
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+
+2. **Crear base de datos PostgreSQL:**
+   - Plan: Free (o el que prefieras)
+   - Anota las credenciales
+
+3. **Configurar variables de entorno:**
+   ```
+   NODE_ENV=production
+   DB_NAME=tu_nombre_base_datos
+   DB_USER=tu_usuario_db
+   DB_PASS=tu_password_db
+   DB_HOST=tu_host_db
+   DB_PORT=5432
+   JWT_SECRET=tu_clave_secreta_jwt
+   ```
+
+## 📋 Variables de entorno para producción
+
+- `DB_NAME`: Nombre de la base de datos PostgreSQL
+- `DB_USER`: Usuario de la base de datos
+- `DB_PASS`: Contraseña de la base de datos
+- `DB_HOST`: Host de la base de datos
+- `DB_PORT`: Puerto de la base de datos (por defecto: 5432)
+- `JWT_SECRET`: Clave secreta para JWT tokens (genera una segura)
+- `NODE_ENV`: production
